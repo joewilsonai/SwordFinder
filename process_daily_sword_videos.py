@@ -12,7 +12,7 @@ from supabase import create_client
 from dotenv import load_dotenv
 import logging
 from get_play_ids_on_demand import get_play_ids_for_pitches
-from clean_video_processor import MLBVideoProcessor
+from clean_video_processor import EnhancedSwordVideoProcessor as MLBVideoProcessor
 
 # Set up logging
 logging.basicConfig(
@@ -95,13 +95,19 @@ def process_videos_for_swords(df: pd.DataFrame, date_str: str):
             
             logging.info(f"Processing video for {pitch.get('player_name')} ({bat_speed:.1f} mph)")
             
-            # Download from MLB
-            success = video_processor.download_video(pitch['mlb_play_id'], local_path)
+            # Get video URL first
+            game_pk = str(pitch.get('game_pk', ''))
+            play_id = str(pitch['mlb_play_id'])
+            video_url = video_processor.get_video_url_for_play(game_pk, play_id)
             
-            if success and os.path.exists(local_path):
-                # Upload to Azure
-                blob_name = f"swords/{date_str}/{video_filename}"
-                azure_url = video_processor.upload_to_azure(local_path, blob_name)
+            if video_url:
+                # Download locally
+                success = video_processor.download_video_locally(video_url, local_path)
+                
+                if success and os.path.exists(local_path):
+                    # Upload to Azure
+                    blob_name = f"swords/{date_str}/{video_filename}"
+                    azure_url = video_processor.upload_video_to_azure(video_url, blob_name)
                 
                 if azure_url:
                     # Update database
@@ -120,7 +126,8 @@ def process_videos_for_swords(df: pd.DataFrame, date_str: str):
                 if os.path.exists(local_path):
                     os.remove(local_path)
             else:
-                logging.warning(f"Failed to download video for play {pitch['mlb_play_id']}")
+            else:
+                logging.warning(f"Failed to get video URL for play {play_id}")
                 
         except Exception as e:
             logging.error(f"Error processing video: {e}")
