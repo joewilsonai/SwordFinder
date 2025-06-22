@@ -1,8 +1,36 @@
 # GitHub Actions Workflows
 
-## Daily MLB Data Update
+## 1. Daily MLB Data Update
 
 The `daily-update.yml` workflow automatically fetches yesterday's MLB data every day.
+
+## 2. Process Daily Sword Videos
+
+The `process-daily-videos.yml` workflow downloads and processes videos for the top sword swings.
+
+### Video Processing Details
+
+#### Schedule
+- Runs at 2:00 PM UTC (7 AM PST / 10 AM EST) - 1 hour after data update
+- ALSO runs automatically when "Daily MLB Data Update" completes
+- Can be triggered manually from Actions tab
+
+#### What it does
+1. Queries database for yesterday's top 10 sword swings (by sword_score)
+2. Fetches MLB play IDs for each swing
+3. Downloads videos from MLB (typically 5-7 succeed out of 10)
+4. Uploads videos to Azure Blob Storage
+5. Updates database with video URLs
+
+#### Why it's separate
+- Video processing takes longer (30-60 seconds per video)
+- Not all swings have videos available (~40% missing)
+- Allows data update to complete quickly
+- Can be re-run independently if videos fail
+
+---
+
+## Original Daily Update Details
 
 ### Schedule
 - Runs daily at 1:00 PM UTC (6 AM PST / 9 AM EST)
