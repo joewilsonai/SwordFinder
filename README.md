@@ -1,393 +1,393 @@
-<p align="center">
-  <img src="static/logo.png" alt="Product Demo" width="250"/>
-</p>
+# SwordFinder - Complete Documentation
 
-<h1 align="center">SwordFinder ⚔️</h1>
+## 🎯 Project Overview
 
+SwordFinder identifies and analyzes "sword swings" in baseball - strikeouts where batters have embarrassingly slow bat speeds on fastballs. With the new 2025 MLB bat tracking data, we can now find the worst swings in baseball and instantly get video clips.
 
-A sophisticated Flask API that leverages MLB Statcast data to analyze and score baseball "sword swings" using advanced computational techniques and custom algorithms.
+### What Makes a True Sword Swing?
+- **2-strike count** → Strikeout
+- **Swinging strike** (not called)
+- **Bat speed < 60 mph** (embarrassingly slow)
+- **Swing path tilt > 30°** (bad swing plane)
 
-## Overview
+## 🚀 Current Status (June 22, 2024)
 
-SwordFinder identifies and analyzes the most impressive baseball swings that result in swinging strikes - these are called "sword swings" because the batter "swings and misses" at difficult pitches. The system uses authentic MLB Statcast data to find, score, and rank the top sword swings with comprehensive analysis including percentile rankings, expert AI commentary, and video highlights.
+### ⏳ Currently Running
+- **Perceived Velocity Calculation**: 20,673 / 353,506 (5.8%) - ETA: ~10-12 hours
+- **Strike Zone Boundaries**: 477 / 353,506 (0.1%) - ETA: ~2-3 hours
+- **Strike Zone Distance**: Waiting for boundaries to complete
 
-## Key Features
+### ✅ Complete & Operational
+- 353,506 MLB pitches (2025 season through June 21) in Supabase
+- Enhanced table with 118+ MLB fields plus custom sword scoring
+- Play ID mapping fixed (gets correct video for each pitch)
+- 426 videos processed and uploaded to Azure
+- Basic API with health check and recent swords endpoints
+- Daily update script ready with all calculations integrated
 
-- **Authentic MLB Data**: Uses 226,833+ real Statcast records from official MLB sources
-- **Advanced Filtering**: Identifies sword swings using multiple swing mechanics criteria
-- **Custom Scoring Algorithm**: Proprietary weighted formula scoring swings 50-100 points
-- **Percentile Analysis**: Compares each swing against entire season's data
-- **AI Expert Commentary**: Claude-powered analysis of what makes each swing special
-- **Video Integration**: Direct links to Baseball Savant video highlights and embedded MP4s.
-- **Database Caching**: PostgreSQL storage for fast response times.
-- **Live Patch System**: Browser-based tool to update missing data.
-- **Dynamic Dashboards**:
-    - Top 5 Swords by selected date.
-    - Top 5 Swords of 2025 (All-Time) displayed on the main page, ranked by `raw_sword_metric`.
+## 📊 Database Schema
 
-## Technical Architecture
-
-### Backend Stack
-- **Python 3.11** - Core runtime
-- **Flask** - Web framework and API endpoints
-- **PostgreSQL** - Primary database with 118+ Statcast fields
-- **SQLAlchemy** - Database ORM and query optimization
-- **pybaseball** - Official MLB data source integration
-- **pandas** - Data processing and analysis
-- **NumPy** - Statistical calculations and percentile ranking
-
-### Data Sources
-- **MLB Statcast**: Official pitch-by-pitch data via pybaseball
-- **Baseball Savant**: Video highlights and play details
-- **MLB Stats API**: Game data and player information
-
-### Core Components
-
-#### 1. Sword Swing Detection Engine
-**File**: `simple_db_swordfinder.py`
-
-**Critical Rule**: A true sword swing is the **final pitch of an at-bat that results in a strikeout**, where that final pitch is a `swinging_strike` or `swinging_strike_blocked`.
-
-**Filtering Criteria (Conceptual - implemented in Python after SQL fetch):**
-- **Bat Speed**: Preferably less than 60 mph (slower swings indicate difficulty).
-- **Intercept Y**: Preferably greater than 14 inches (swing path intersection).
-- **Swing Path Tilt**: Preferably greater than 30 degrees (steep swing angle).
-- **Zone Penalty**: Dynamically calculated based on pitch location relative to strike zone.
-
-**Query Logic (in `simple_db_swordfinder.py`):**
-1.  A CTE (`final_pitches_of_strikeout_at_bats`) uses `DISTINCT ON (game_pk, at_bat_number)` and `ORDER BY ... pitch_number DESC` to select the *last recorded pitch* of all at-bats on a given date where `events = 'strikeout'`.
-2.  The main query then selects from this CTE, further filtering these last pitches for `description IN ('swinging_strike', 'swinging_strike_blocked')`.
-3.  It also ensures `bat_speed`, `swing_path_tilt`, and `intercept_ball_minus_batter_pos_y_inches` (aliased as `intercept_y`) are `NOT NULL`.
-4.  All such candidates are returned to Python.
-
-**Scoring Logic (in `simple_db_swordfinder.py`):**
-1.  **Dynamic Zone Penalty Factor:** Calculated for each candidate based on `plate_x`, `plate_z`, `sz_top`, `sz_bot`. A factor >= 1.0 (1.0 is neutral, >1.0 rewards pitches further from the zone).
-    ```python
-    # Simplified concept from _calculate_dynamic_zone_penalty:
-    out_x_feet = max(abs(plate_x) - 0.83, 0)
-    # ... calculation for out_z_feet ...
-    penalty_inches = (out_x_feet + out_z_feet) * 12
-    scaled_bonus = min(penalty_inches / 18.0, 2.0) 
-    dynamic_zone_penalty_factor = 1.0 + scaled_bonus
-    ```
-2.  **Raw Sword Metric:** Calculated for each candidate:
-    ```python
-    # Components are normalized (0-1 range, higher is "better" for a sword)
-    bat_speed_comp = (60 - bat_speed) / 60 # if bat_speed <= 60 else 0
-    tilt_comp = swing_path_tilt / 60 # if swing_path_tilt <= 60 else 1.0
-    intercept_comp = intercept_y / 50 # if intercept_y <= 50 else 1.0
-
-    raw_sword_metric = (
-        0.35 * bat_speed_comp +
-        0.25 * tilt_comp +
-        0.25 * intercept_comp +
-        0.15 * dynamic_zone_penalty_factor 
-    )
-    ```
-3.  **Sorting:** All candidates are sorted by `raw_sword_metric` in descending order.
-4.  **Final Scores for Top 5:**
-    *   `sword_score` (Universal Scale): `raw_sword_metric * 50 + 50`
-    *   `daily_normalized_score` (Daily UX Scale): Min-max normalized against all of the day's `raw_sword_metric` values, then scaled `50 + normalized_value * 50`.
-    *   Both scores, plus `raw_sword_metric`, are included in the API response for the top 5 swords.
-
-#### 2. Database Schema
-**File**: `models_complete.py`
-
-**Primary Table**: `statcast_pitches`
-- 118+ fields covering all MLB Statcast data
-- Optimized indexes on game_date, player_name, pitch_type
-- Complete pitch details: velocity, spin rate, location, teams
-
-**Note on Player Names and IDs**:
-- **Pitcher Name**: For each pitch event, the pitcher's name is sourced from the `player_name` field in the `statcast_pitches` table. The `pitcher` field contains the pitcher's MLBAM ID.
-- **Batter Name**: The batter's name is not directly available in the `statcast_pitches` table for each pitch. It is fetched dynamically by the application (`simple_db_swordfinder.py`) using the `batter` field (batter's MLBAM ID) to query the MLB Stats API (`https://statsapi.mlb.com/api/v1/people/{batter_id}`).
-- **Pitch Name**: This refers to the descriptive name of the pitch type (e.g., "4-Seam Fastball") and is sourced from the `pitch_name` field in `statcast_pitches`. The `pitch_type` field contains the code (e.g., "FF").
-
-**Analysis Table**: `sword_swings`
-- Sword score calculations and rankings
-- Percentile analysis results
-- AI expert commentary
-- Video URLs and local MP4 storage
-- Cached results for performance
-
-**Tracking Table**: `daily_results`
-- Processing status by date
-- Performance metrics and completion tracking
-
-#### 3. Percentile Analysis Engine
-**File**: `percentile_analyzer.py`
-
-Compares each sword swing against season-wide data:
-- **Bat Speed Percentile**: How slow compared to all swings
-- **Swing Tilt Percentile**: How steep the swing angle
-- **Velocity Percentile**: How fast the pitch was
-- **Spin Rate Percentile**: How much the ball spun
-- **Location Percentile**: Where in strike zone
-
-#### 4. Expert AI Analysis
-**Integration**: Claude Sonnet 4.0 via Anthropic API
-
-Generates detailed commentary explaining:
-- What made the swing technically difficult
-- Pitch characteristics that created the challenge
-- Swing mechanics analysis
-- Context within the at-bat situation
-
-## Recent Updates (May 26, 2025)
-
-### 1. Fixed Sword Query Logic
-- **Issue**: Query was returning no results due to overly restrictive filters
-- **Solution**: Modified query to use CTE (Common Table Expression) to first identify strikeout at-bats, then find swinging strikes within those at-bats
-- **Files Modified**: `simple_db_swordfinder.py`
-
-### 2. Database Field Mapping Corrections & Batter Name Lookup
-- **Issue**: Original field index mappings were incorrect in `simple_db_swordfinder.py`, leading to data misalignment (e.g., descriptive pitch names appearing in `batter_id` field, `pfx_z` values in `pitch_name` field). Batter names were also not being displayed.
-- **Solution**:
-    - Corrected field index mappings in `simple_db_swordfinder.py` to accurately reflect the SQL query's column order.
-    - Implemented dynamic fetching of batter names using the `batter` ID (MLBAM ID) and the MLB Stats API (`https://statsapi.mlb.com/api/v1/people/{batter_id}`).
-- **Current Status**: API now correctly returns sword swings with proper field values, including pitcher names, fetched batter names, and correct descriptive pitch names.
-- **Note on `launch_angle` and `launch_speed`**: These fields will typically be `null` for sword swings (which are swinging strikes) because no ball is put into play. This is expected behavior and not a mapping error.
-
-### 3. Diagnostic Tools Created
-- **test_query.py**: Diagnostic script to check database contents and validate queries
-- **debug_swords.py**: Comprehensive debugging tool for sword swing detection
-- **Purpose**: Help identify why queries return empty results and validate data presence
-
-### 4. Validated Data Presence
-- **Confirmed**: Database has 4,650 pitches for May 24, 2025
-- **Swinging Strikes**: 470 total swinging strikes on that date
-- **With Bat Speed Data**: 468 swinging strikes have bat speed data
-- **In Strikeout At-Bats**: 287 swinging strikes are part of strikeout at-bats
-
-## Known Issues & Current State
-
-### Working Features
-- ✅ Database connection and query execution
-- ✅ Sword swing detection for strikeout at-bats
-- ✅ API returns 5 sword swings for May 24, 2025
-- ✅ Video URL generation and local MP4 storage
-- ✅ Basic scoring algorithm implementation
-
-### Known Issues
-1. **Field Mapping**: (Addressed) Previous issues with `pitch_name` and `batter_id` have been corrected.
-   
-2. **Missing pitcher_name**: (Addressed) Pitcher names are sourced from the `player_name` field for pitch events. Batter names are now fetched via API.
-
-3. **Video URLs**: Generated URLs may not always work
-   - Some playIds might be invalid
-   - Need better error handling for missing videos
-
-## Next Steps for Development
-
-### Immediate Priorities (Next Developer Should Start Here)
-
-(The following items were the original priorities and have now been addressed by the updates on May 26, 2025)
-
-#### 1. Fix Field Mapping Issues (✅ Addressed)
-- Field mappings in `simple_db_swordfinder.py` have been corrected.
-- Batter names are now fetched and included.
-
-#### 2. Add Pitcher Name Support (✅ Addressed)
-- Pitcher names are correctly sourced from `player_name`.
-- Batter names are fetched via API.
-
-#### 3. Improve Video Integration
-- Add error handling for missing/invalid playIds
-- Implement retry logic for failed video downloads
-- Add CDN support for video delivery
-- Consider caching video metadata
-
-#### 4. Enhance Sword Criteria
-- Consider adding more sophisticated criteria
-- Weight factors based on statistical analysis
-- Add machine learning model for sword prediction
-- Include exit velocity and launch angle when available
-
-### Medium-Term Goals
-
-#### 1. Performance Optimization
-- Add Redis caching for frequent queries
-- Implement query result pagination
-- Create materialized views for complex queries
-- Add database connection pooling
-
-#### 2. Data Quality Improvements
-- Implement data validation on import
-- Add data completeness checks
-- Create automated tests for data integrity
-- Build data quality dashboard
-
-#### 3. API Enhancements
-- Add date range queries (not just single date)
-- Implement player-specific sword queries
-- Add team-based filtering
-- Create aggregate statistics endpoints
-- New endpoint `/api/top-swords-2025` provides data for the all-time 2025 leaderboard.
-
-#### 4. Frontend Development
-- **Main Page (`home.html`)**:
-    - Displays top 5 swords for a user-selected date.
-    - Features a "Top 5 Swords of 2025 (All-Time)" dashboard that loads automatically, showing swords ranked by `raw_sword_metric` with embedded videos.
-- Add video player with swing analysis overlay (partially done with basic player).
-- Create interactive charts for sword metrics.
-- Implement real-time updates during games.
-
-### Long-Term Vision
-
-#### 1. Machine Learning Integration
-- Train model to predict sword swings
-- Identify patterns in sword-prone situations
-- Create pitcher-batter matchup analysis
-- Build predictive sword scoring
-
-#### 2. Real-Time Processing
-- Connect to live MLB data feeds
-- Process swings as they happen
-- Send notifications for epic swords
-- Build live leaderboards
-
-#### 3. Advanced Analytics
-- Compare sword rates across eras
-- Analyze sword trends by ballpark
-- Study impact of weather on swords
-- Create sword difficulty rankings
-
-#### 4. Mobile Application
-- Native iOS/Android apps
-- Push notifications for favorite players
-- Offline video viewing
-- Social sharing features
-
-## Testing & Validation
-
-### Current Test Coverage
-- Database connectivity tests
-- Query result validation
-- Field mapping verification
-- API endpoint testing
-
-### Recommended Test Suite
-```bash
-# Run diagnostic tests
-python test_query.py          # Database query testing
-python debug_swords.py        # Sword detection validation
-python test_percentiles.py    # Percentile calculation tests
-
-# API testing
-curl -X POST http://localhost:5001/swords \
-  -H "Content-Type: application/json" \
-  -d '{"date": "2025-05-24"}' | jq '.'
-```
-
-### Data Validation Queries
+### Table: `mlb_pitches_enhanced`
 ```sql
--- Check strikeout at-bats
-SELECT COUNT(DISTINCT CONCAT(game_pk, '-', at_bat_number))
-FROM statcast_pitches 
-WHERE game_date = '2025-05-24'
-AND events = 'strikeout';
+-- Core MLB fields
+game_pk, game_date, pitcher, batter, pitch_type, release_speed, etc.
 
--- Verify sword candidates
-WITH strikeout_at_bats AS (
-    SELECT DISTINCT game_pk, at_bat_number
-    FROM statcast_pitches
-    WHERE game_date = '2025-05-24'
-    AND events = 'strikeout'
-)
-SELECT COUNT(*)
-FROM statcast_pitches sp
-JOIN strikeout_at_bats sa 
-    ON sp.game_pk = sa.game_pk 
-    AND sp.at_bat_number = sa.at_bat_number
-WHERE sp.game_date = '2025-05-24'
-AND sp.description IN ('swinging_strike', 'swinging_strike_blocked')
-AND sp.bat_speed IS NOT NULL;
+-- 2025 Bat tracking  
+bat_speed, swing_length, swing_path_tilt, attack_angle
+
+-- Custom fields
+sword_score              -- Calculated score for sword quality
+video_azure_blob_url     -- For processed videos
+velo_percentile_overall  -- Pitch percentiles
+spin_percentile_pitch_type
+bat_speed_percentile_sword
+perceived_velocity       -- Based on release extension
+strike_zone_distance_inches -- Distance from zone edge
+sz_top, sz_bot          -- Strike zone boundaries
+-- ... and more
 ```
 
-## Development Environment Setup
+## 🔧 Key Scripts
 
-### Required Environment Variables
+### 1. Data Collection
+- **`download_full_2025_season.py`** - Downloads all MLB data from pybaseball
+- **`get_play_ids_on_demand.py`** - Gets MLB play IDs for specific pitches
+
+### 2. Database Setup
+- **`create_mlb_enhanced_table.sql`** - Supabase table schema
+- **`upload_data_correctly.py`** - Uploads data with proper type handling
+- **`add_sz_columns.sql`** - Adds strike zone columns to existing table
+
+### 3. Video Processing
+- **`clean_video_processor.py`** - Downloads videos from MLB & uploads to Azure
+- **`process_top_sword_videos.py`** - Complete video pipeline with Azure integration
+- **`process_regular_season_videos_smart.py`** - Smart processor that skips completed dates
+
+### 4. Data Calculations (Currently Running!)
+- **`calculate_perceived_velocity.py`** - Calculates perceived velocity based on extension
+- **`calculate_strike_zone_distance.py`** - Calculates distance from strike zone
+- **`calculate_percentiles_sql.py`** - Fast SQL-based percentile calculator
+- **`calculate_all_sword_scores.py`** - Calculate sword scores for entire database
+
+### 5. Daily Operations
+- **`daily_update.py`** - Automated daily data refresh with all calculations
+- **`update_percentiles_daily.py`** - Efficient percentile updates using cached distributions
+
+### 6. API Development
+- **`api.py`** - FastAPI backend with initial endpoints
+- **`setup_database_for_ui.py`** - Interactive database preparation script
+
+## 🏗️ Setup From Scratch
+
+### Prerequisites
 ```bash
-DATABASE_URL=postgresql://swordfinder:swordfinder123@localhost:5432/swordfinder_db
-SESSION_SECRET=your-flask-session-secret
-ANTHROPIC_API_KEY=your-anthropic-api-key  # Optional for AI analysis
+# Python 3.9+
+python -m venv .venv
+source .venv/bin/activate  # or .venv\Scripts\activate on Windows
+pip install -r requirements.txt
 ```
 
-### Local Development Commands
+### Environment Variables (.env)
+```env
+# Supabase
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+DATABASE_URL=postgresql://...
+
+# Azure Blob Storage (for video hosting)
+AZURE_STORAGE_CONNECTION_STRING=...
+AZURE_CONTAINER_NAME=swordfinder-videos
+```
+
+⚠️ **Note**: Copy `.env.example` to `.env` and fill in your credentials.
+
+✅ **Status**: Both Supabase and Azure are now configured and tested!
+
+### Step 1: Download MLB Data
 ```bash
-# Start Flask development server
-cd SwordFinder
-source venv/bin/activate
-export DATABASE_URL="postgresql://swordfinder:swordfinder123@localhost:5432/swordfinder_db"
-python app.py
-
-# Run diagnostic tools
-python test_query.py
-python debug_swords.py
-
-# Test API endpoints
-curl -X POST http://localhost:5001/swords -H "Content-Type: application/json" -d '{"date": "2025-05-24"}'
+python download_full_2025_season.py
+# Creates: mlb_2025_full_season_complete.csv (227MB)
 ```
 
-## Troubleshooting Guide
+### Step 2: Create Database
+1. Go to Supabase SQL editor
+2. Run `create_mlb_enhanced_table.sql`
+3. Creates table with indexes
 
-### Issue: API Returns Empty Results
-1. Check if date has data: `python test_query.py`
-2. Verify strikeouts exist for that date
-3. Confirm swinging strikes have bat speed data
-4. Check query filters aren't too restrictive
+### Step 3: Upload Data
+```bash
+python upload_data_correctly.py
+# Uploads 353,501 pitches in ~3 minutes
+```
 
-### Issue: Field Values Appear Incorrect
-1. Print raw query results to verify field order
-2. Check field index mappings in sword_swing dictionary
-3. Verify database schema matches expected fields
-4. Use debug_swords.py to inspect actual data
+### Step 4: Verify
+```sql
+-- In Supabase SQL editor
+SELECT COUNT(*) FROM mlb_pitches_enhanced;
+-- Should return 353,501
+```
 
-### Issue: Database Connection Errors
-1. Verify PostgreSQL is running
-2. Check DATABASE_URL is set correctly
-3. Confirm database exists and has tables
-4. Test connection with psql client
+## 🎯 Finding Sword Swings
 
-### Issue: Video Downloads Fail
-1. Check if play_id/sv_id is valid
-2. Verify Baseball Savant URL format
-3. Check network connectivity
-4. Review video_downloader.py logs
+### SQL Queries
+```sql
+-- Worst sword swings
+SELECT player_name, bat_speed, release_speed, sword_score, game_date
+FROM mlb_pitches_enhanced
+WHERE bat_speed < 30 AND bat_speed > 0
+ORDER BY bat_speed ASC
+LIMIT 10;
 
-## Contributing
+-- True sword swings (all criteria)
+SELECT *
+FROM mlb_pitches_enhanced
+WHERE strikes = 2 
+  AND events = 'strikeout'
+  AND description IN ('swinging_strike', 'swinging_strike_blocked')
+  AND bat_speed < 60
+  AND swing_path_tilt > 30
+ORDER BY bat_speed ASC;
+```
 
-### Code Style
-- Follow PEP 8 Python style guidelines
-- Use type hints where appropriate
-- Include comprehensive docstrings
-- Add unit tests for new features
+### Python Example
+```python
+import pandas as pd
+from supabase import create_client
 
-### Pull Request Process
-1. Fork the repository
-2. Create feature branch
-3. Add tests for new functionality
-4. Update documentation
-5. Submit pull request with detailed description
+# Connect
+supabase = create_client(url, key)
 
-### Development Best Practices
-- Always test with real MLB data
-- Validate sword criteria changes with domain experts
-- Document any field mapping changes
-- Keep backwards compatibility for API endpoints
+# Query worst swords
+result = supabase.table('mlb_pitches_enhanced')\
+    .select('*')\
+    .lt('bat_speed', 30)\
+    .gt('bat_speed', 0)\
+    .order('bat_speed')\
+    .limit(10)\
+    .execute()
 
-## License
+# Get play IDs and download videos
+from get_play_ids_on_demand import get_play_ids_for_pitches, download_video
 
-This project uses authentic MLB data through official APIs and adheres to all terms of service for data usage.
+df = pd.DataFrame(result.data)
+df_with_ids = get_play_ids_for_pitches(df)
 
-## Support
+for _, pitch in df_with_ids.iterrows():
+    if pitch['mlb_play_id']:
+        download_video(pitch['mlb_play_id'], f"sword_{pitch['player_name']}.mp4")
+```
 
-For technical issues or questions:
-1. Check troubleshooting section
-2. Review application logs
-3. Use built-in diagnostic tools
-4. Consult API documentation
+## 📹 Video Processing
+
+### Get Videos for Any Query
+```python
+# 1. Query your data
+longest_hrs = supabase.table('mlb_pitches_enhanced')\
+    .select('*')\
+    .eq('is_home_run', True)\
+    .order('hit_distance_sc', desc=True)\
+    .limit(10)\
+    .execute()
+
+# 2. Get play IDs (only when needed)
+df = pd.DataFrame(longest_hrs.data)
+df_with_ids = get_play_ids_for_pitches(df)
+
+# 3. Download videos
+for _, hr in df_with_ids.iterrows():
+    download_video(hr['mlb_play_id'], f"HR_{hr['hit_distance_sc']}ft.mp4")
+```
+
+## 🔄 Daily Updates (New!)
+
+Keep your data fresh with automated daily updates:
+
+```bash
+# Test the daily update script
+python daily_update.py
+
+# Schedule it to run at 1pm daily
+# See setup_daily_update.md for options (cron, GitHub Actions, etc.)
+```
+
+The script will:
+- Fetch yesterday's MLB data (~3,000 pitches)
+- Calculate sword scores
+- Insert into Supabase (handles duplicates)
+- **Calculate percentiles for the new data** 🆕
+- Log the top sword swings
+- Takes ~2 minutes to run
+
+### How Daily Percentiles Work
+
+Instead of recalculating ALL percentiles (slow), the daily update:
+1. **Uses cached distributions** - Stores percentile breakpoints (1st, 5th, 10th, etc.)
+2. **Interpolates new values** - Estimates percentiles based on where they fall
+3. **Refreshes weekly** - Rebuilds the cache to stay accurate
+4. **Runs automatically** - Integrated into `daily_update.py`
+
+This approach is ~100x faster than recalculating everything!
+
+## 📏 Extension & Perceived Velocity
+
+Release extension dramatically affects how hitters perceive velocity:
+
+### The Math
+```
+Perceived Velocity = Actual Velocity × (60.5 / (60.5 - Extension))
+```
+
+Example: **95 mph with 7 feet of extension**
+- Effective distance: 60.5 - 7 = 53.5 feet
+- Perceived velocity: 95 × (60.5/53.5) = **107.4 mph**
+- That's a **+12.4 mph gain** from extension alone!
+
+### Calculate for Your Database
+```bash
+python calculate_perceived_velocity.py
+# Currently running - 5.8% complete, ETA: 10-12 hours
+```
+
+### New Percentiles Available
+- **Extension percentiles**: How does a pitcher's extension compare?
+- **Perceived velocity percentiles**: The velocity hitters actually experience
+
+### Sample Queries
+```sql
+-- Find pitchers with elite extension
+SELECT pitcher_name, AVG(release_extension) as avg_extension,
+       AVG(extension_percentile_overall) as extension_pct
+FROM mlb_pitches_enhanced
+WHERE release_extension IS NOT NULL
+GROUP BY pitcher_name
+HAVING COUNT(*) > 100
+ORDER BY avg_extension DESC
+LIMIT 10;
+
+-- Biggest perceived velocity gains
+SELECT pitcher_name, pitch_type, release_speed, release_extension,
+       perceived_velocity, (perceived_velocity - release_speed) as velo_gain
+FROM mlb_pitches_enhanced
+WHERE perceived_velocity IS NOT NULL
+ORDER BY velo_gain DESC
+LIMIT 20;
+```
+
+## 🔍 Key Discoveries
+
+1. **Play ID Mapping**: Each pitch needs the LAST play ID from its at-bat
+2. **Data Integrity**: Only ~10% of "sword candidates" are true sword swings
+3. **Bat Tracking**: Available for ~44% of all pitches in 2025
+4. **Spring Training Videos**: Spring training games (game_type = 'S') do NOT have video coverage!
+   - Only regular season games (game_type = 'R') have videos
+   - Use `process_regular_season_videos.py` to skip spring training automatically
+
+## 📈 Next Steps
+
+📋 **See TODO.md for the complete post-video roadmap!**
+
+1. **Set Up Daily Updates** ✨
+   - Run `python daily_update.py` to test
+   - Follow `setup_daily_update.md` to schedule
+   - Keeps your data fresh automatically
+
+2. **Calculate Percentiles** ✨
+   - First, run `create_percentile_functions.sql` in Supabase SQL Editor
+   - Then run `python calculate_percentiles_sql.py` for fast SQL-based calculation
+   - Or use `python calculate_percentiles.py` for Python version
+   - Calculates velocity, spin, movement, and bat speed percentiles
+   - Daily updates will handle percentiles automatically after this!
+   - See `percentile_calculation_plan.md` for details
+
+3. **Process Videos**
+   - Run `process_top_sword_videos.py` for top 100 swords
+   - Upload to Azure Blob Storage
+   - Update video_azure_blob_url in database
+
+4. **Build API**
+   - FastAPI with endpoints for queries
+   - Video streaming from Azure CDN
+   - Real-time updates via Supabase
+
+5. **Frontend**
+   - Next.js app with video player
+   - Leaderboards and statistics
+   - Search and filter interface
+
+## 📁 Project Structure
+
+The project has been cleaned up to maintain only essential production files:
+
+### Core Documentation
+- **README.md** - This documentation
+- **requirements.txt** - Python dependencies
+- **TODO.md** - Comprehensive roadmap (updated June 22, 2024)
+
+### Data Files
+- **mlb_2025_full_season_complete.csv** - Complete 2025 MLB data (227MB)
+- **mlb_2025_with_sword_scores.csv** - MLB data with calculated sword scores (232MB)
+
+### Processing Scripts
+- Data collection and upload scripts
+- Video processing and Azure upload scripts
+- Calculation scripts for perceived velocity, strike zone distance, and percentiles
+- Daily update automation
+
+### API & UI Development
+- **api.py** - FastAPI backend with endpoints
+- **QUICK_START_UI.md** - Step-by-step UI building guide
+- Database setup and migration scripts
+
+### Legacy Reference
+The `legacy/` directory contains the original Flask app for reference
+
+### Support Files
+- Configuration and planning documents
+- SQL scripts for database operations
+- Testing scripts for specific dates/scenarios
+
+## 📊 Sample Results
+
+### Slowest Bat Speeds (2025)
+1. Gunnar Hoglund - 15.3 mph
+2. Trevor Williams - 15.4 mph
+3. Charlie Morton - 15.4 mph
+
+### Longest Home Runs (2025)
+1. Landen Roupp - 484 ft
+2. Jack Leiter - 479 ft
+3. JP Sears - 470 ft
+
+### Fastest Pitches (2025)
+1. Mason Miller - 103.9 mph
+2. Aroldis Chapman - 103.8 mph
+3. Mason Miller - 103.7 mph
+
+## 🆘 Troubleshooting
+
+### Import Errors
+- Check data types match schema
+- Ensure no infinity/NaN values
+- Verify column names match
+
+### Video Download Issues
+- Confirm play_id is valid
+- Check MLB video availability
+- Some games may not have video
+
+### Performance
+- Use indexes for common queries
+- Batch operations when possible
+- Consider partitioning by date
+
+## 📝 License
+
+This project uses publicly available MLB data. Video content belongs to MLB.
 
 ---
 
-**SwordFinder** - Cutting through baseball data to find the sharpest swings ⚔️
+**Created**: January 2025  
+**Last Updated**: June 22, 2024, 4:00 PM PST
+**Status**: Background calculations in progress (ETA: 10-12 hours)
+**Next Steps**: Complete calculations, then build frontend UI 
