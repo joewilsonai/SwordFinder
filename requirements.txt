@@ -12,8 +12,7 @@ supabase>=1.0.0
 sqlalchemy>=1.4.0
 azure-storage-blob>=12.19.0
 
-# Video Processing (NEW - from GitHub analysis)
-mlb_videos>=0.1.0
+# Video Processing
 requests>=2.31.0
 beautifulsoup4>=4.12.0
 
