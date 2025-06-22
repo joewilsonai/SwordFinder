@@ -28,9 +28,11 @@ def get_yesterdays_top_swords(supabase, date_str: str, top_n: int = 10):
     """Get yesterday's top sword swings from the database"""
     
     # Query for yesterday's sword candidates
+    # Only get regular season games (game_type = 'R') as spring training has no videos
     result = supabase.table('mlb_pitches_enhanced')\
         .select('*')\
         .eq('game_date', date_str)\
+        .eq('game_type', 'R')\
         .not_.is_('sword_score', 'null')\
         .gt('sword_score', 0)\
         .is_('video_azure_blob_url', 'null')\
@@ -105,14 +107,22 @@ def process_videos_for_swords(df: pd.DataFrame, date_str: str):
                 azure_url = video_processor.upload_video_to_azure(video_url, blob_name)
                 
                 if azure_url:
-                    # Update database
-                    update_result = supabase.table('mlb_pitches_enhanced').update({
-                        'video_azure_blob_url': azure_url,
-                        'video_processed_at': datetime.now().isoformat()
-                    }).eq('game_pk', pitch.get('game_pk'))\
-                     .eq('at_bat_number', pitch.get('at_bat_number'))\
-                     .eq('pitch_number', pitch.get('pitch_number'))\
-                     .execute()
+                    # Update database using unique ID if available
+                    if pitch.get('id'):
+                        # Preferred: update by unique ID
+                        update_result = supabase.table('mlb_pitches_enhanced').update({
+                            'video_azure_blob_url': azure_url,
+                            'video_processed_at': datetime.now().isoformat()
+                        }).eq('id', pitch.get('id')).execute()
+                    else:
+                        # Fallback: use composite key
+                        update_result = supabase.table('mlb_pitches_enhanced').update({
+                            'video_azure_blob_url': azure_url,
+                            'video_processed_at': datetime.now().isoformat()
+                        }).eq('game_pk', pitch.get('game_pk'))\
+                         .eq('at_bat_number', pitch.get('at_bat_number'))\
+                         .eq('pitch_number', pitch.get('pitch_number'))\
+                         .execute()
                     
                     processed_count += 1
                     logging.info(f"✅ Video uploaded: {azure_url}")

@@ -13,7 +13,7 @@ from pybaseball import statcast
 from supabase import create_client
 from dotenv import load_dotenv
 import logging
-from typing import Optional
+from typing import Optional, List
 from update_percentiles_daily import DailyPercentileUpdater
 
 # Set up logging
@@ -52,16 +52,41 @@ def get_yesterday_data() -> Optional[pd.DataFrame]:
         logging.error(f"Error fetching data: {e}")
         return None
 
-def prepare_data_for_upload(df: pd.DataFrame) -> pd.DataFrame:
+def get_existing_columns(supabase) -> List[str]:
+    """Get list of columns that exist in the database"""
+    try:
+        # Get one row to see structure
+        result = supabase.table('mlb_pitches_enhanced').select('*').limit(1).execute()
+        if result.data:
+            return list(result.data[0].keys())
+        else:
+            # If no data, return empty list (will fail upload but safely)
+            return []
+    except Exception as e:
+        logging.error(f"Error getting columns: {e}")
+        return []
+
+def prepare_data_for_upload(df: pd.DataFrame, supabase=None) -> pd.DataFrame:
     """Clean and prepare data for Supabase upload"""
     # Replace infinity values
     df = df.replace([float('inf'), float('-inf')], None)
     
-    # Ensure proper boolean conversion
-    bool_columns = ['is_home_run', 'is_swing', 'is_whiff']
-    for col in bool_columns:
-        if col in df.columns:
-            df[col] = df[col].map(lambda x: bool(x) if pd.notna(x) else None)
+    # If supabase client provided, filter to existing columns
+    if supabase:
+        existing_columns = get_existing_columns(supabase)
+        if existing_columns:
+            # Filter to only columns that exist in database
+            df_columns = set(df.columns)
+            db_columns = set(existing_columns)
+            columns_to_keep = list(df_columns.intersection(db_columns))
+            
+            # Log what we're dropping
+            dropped_columns = df_columns - db_columns
+            if dropped_columns:
+                logging.warning(f"Dropping {len(dropped_columns)} columns not in database")
+            
+            # Keep only columns that exist in database
+            df = df[columns_to_keep].copy()
     
     # Convert to proper types
     int_columns = ['pitcher', 'batter', 'outs_when_up', 'strikes', 'balls', 
@@ -70,6 +95,12 @@ def prepare_data_for_upload(df: pd.DataFrame) -> pd.DataFrame:
         if col in df.columns:
             # Convert to numeric, handling errors
             df[col] = pd.to_numeric(df[col], errors='coerce')
+    
+    # Convert on_base columns from player IDs to boolean
+    on_base_columns = ['on_1b', 'on_2b', 'on_3b']
+    for col in on_base_columns:
+        if col in df.columns:
+            df[col] = df[col].notna()
     
     # Ensure game_date is datetime
     if 'game_date' in df.columns:
@@ -170,6 +201,9 @@ def upload_to_supabase(df: pd.DataFrame) -> bool:
     try:
         supabase = create_client(supabase_url, supabase_key)
         
+        # Filter data to only columns that exist in database
+        df = prepare_data_for_upload(df, supabase)
+        
         # Convert to dict and handle NaN values
         records = df.to_dict('records')
         for record in records:
@@ -249,9 +283,42 @@ def update_percentiles_for_date(date_str: str) -> bool:
         logging.error(f"Error updating percentiles: {e}")
         return False
 
+def check_if_date_exists(date_str: str) -> bool:
+    """Check if data for a specific date already exists in the database"""
+    load_dotenv()
+    
+    supabase_url = os.getenv('SUPABASE_URL')
+    supabase_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+    
+    if not supabase_url or not supabase_key:
+        return False
+    
+    try:
+        supabase = create_client(supabase_url, supabase_key)
+        result = supabase.table('mlb_pitches_enhanced').select('id', count='exact').eq('game_date', date_str).execute()
+        count = result.count or 0
+        
+        if count > 0:
+            logging.info(f"Found {count} existing records for {date_str}")
+            return True
+        return False
+    except Exception as e:
+        logging.error(f"Error checking existing data: {e}")
+        return False
+
 def main():
     """Main execution function"""
     logging.info("Starting daily MLB data update...")
+    
+    # Store the date for later use
+    yesterday = datetime.now() - timedelta(days=1)
+    date_str = yesterday.strftime('%Y-%m-%d')
+    
+    # Check if data already exists
+    if check_if_date_exists(date_str):
+        logging.info(f"Data for {date_str} already exists. Skipping update.")
+        send_notification(True, 0)  # Success but no new records
+        return
     
     # Get yesterday's data
     df = get_yesterday_data()
@@ -261,12 +328,7 @@ def main():
         send_notification(False)
         return
     
-    # Store the date for later use
-    yesterday = datetime.now() - timedelta(days=1)
-    date_str = yesterday.strftime('%Y-%m-%d')
-    
-    # Prepare data
-    df = prepare_data_for_upload(df)
+    # Calculate sword candidates (before upload, since this adds columns)
     df = calculate_sword_candidates(df)
     
     # Calculate perceived velocity if extension data exists
