@@ -91,7 +91,6 @@ def process_videos_for_swords(df: pd.DataFrame, date_str: str):
             player_name = str(pitch.get('player_name', 'unknown')).replace(' ', '_')
             bat_speed = pitch.get('bat_speed', 0)
             video_filename = f"sword_{date_str}_{player_name}_{bat_speed:.1f}mph.mp4"
-            local_path = f"temp_{video_filename}"
             
             logging.info(f"Processing video for {pitch.get('player_name')} ({bat_speed:.1f} mph)")
             
@@ -101,13 +100,9 @@ def process_videos_for_swords(df: pd.DataFrame, date_str: str):
             video_url = video_processor.get_video_url_for_play(game_pk, play_id)
             
             if video_url:
-                # Download locally
-                success = video_processor.download_video_locally(video_url, local_path)
-                
-                if success and os.path.exists(local_path):
-                    # Upload to Azure
-                    blob_name = f"swords/{date_str}/{video_filename}"
-                    azure_url = video_processor.upload_video_to_azure(video_url, blob_name)
+                # Direct upload to Azure (streams from URL)
+                blob_name = f"swords/{date_str}/{video_filename}"
+                azure_url = video_processor.upload_video_to_azure(video_url, blob_name)
                 
                 if azure_url:
                     # Update database
@@ -121,11 +116,6 @@ def process_videos_for_swords(df: pd.DataFrame, date_str: str):
                     
                     processed_count += 1
                     logging.info(f"✅ Video uploaded: {azure_url}")
-                
-                # Clean up
-                if os.path.exists(local_path):
-                    os.remove(local_path)
-            else:
             else:
                 logging.warning(f"Failed to get video URL for play {play_id}")
                 

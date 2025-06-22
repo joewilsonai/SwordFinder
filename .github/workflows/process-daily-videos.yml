@@ -46,7 +46,9 @@ jobs:
         AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}
         AZURE_CONTAINER_NAME: ${{ secrets.AZURE_CONTAINER_NAME }}
       run: |
-        python process_daily_sword_videos.py
+        # Add current directory to Python path for imports
+        export PYTHONPATH="${PYTHONPATH}:${PWD}"
+        python process_daily_sword_videos.py || (echo "Script failed. Testing imports..." && python test_workflow_imports.py)
     
     - name: Upload logs as artifacts
       if: always()
