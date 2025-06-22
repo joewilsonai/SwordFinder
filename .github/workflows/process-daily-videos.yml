@@ -1,0 +1,59 @@
+name: Process Daily Sword Videos
+
+on:
+  schedule:
+    # Run at 2:00 PM UTC (7 AM PST / 10 AM EST) - 1 hour after data update
+    - cron: '0 14 * * *'
+  workflow_dispatch:  # Allow manual triggering
+  workflow_run:
+    workflows: ["Daily MLB Data Update"]
+    types:
+      - completed
+
+jobs:
+  process-videos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60  # Videos take longer
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+    
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Process yesterday's top sword videos
+      env:
+        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}
+        AZURE_CONTAINER_NAME: ${{ secrets.AZURE_CONTAINER_NAME }}
+      run: |
+        python process_daily_sword_videos.py
+    
+    - name: Upload logs as artifacts
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: video-processing-logs
+        path: |
+          video_processing.log
+          *.log
+        retention-days: 7 
