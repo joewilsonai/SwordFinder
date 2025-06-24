@@ -165,7 +165,8 @@ def calculate_sword_candidates(df: pd.DataFrame) -> pd.DataFrame:
     
     # Calculate sword score for candidates
     def calculate_sword_score(row):
-        if not row['is_sword_candidate'] or pd.isna(row['bat_speed']):
+        # Handle NA values explicitly to avoid ambiguity
+        if pd.isna(row['is_sword_candidate']) or not row['is_sword_candidate'] or pd.isna(row['bat_speed']):
             return None
             
         # Simple sword score calculation
