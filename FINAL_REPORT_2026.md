@@ -45,6 +45,9 @@ SwordFinder has been revived for the 2026 MLB season and is operational end-to-e
 ## What is not fully ideal yet
 - SQL RPC percentile updater (`calculate_percentiles_sql.py`) still times out on larger updates.
   - Mitigation exists (`calculate_percentiles_year.py`), but SQL path itself remains constrained.
+- Local workflow YAML hardening changes are not pushed yet.
+  - Current GitHub token lacks `workflow` scope for updating `.github/workflows/*`.
+  - Workflows are still active and validated via manual runs on current remote definitions.
 - Vercel custom domain was not attached from CLI in this run.
   - Production alias is active on `ui-one-henna.vercel.app`.
 - Public anon key is currently present in UI runtime config (`ui/assets/config.js`).

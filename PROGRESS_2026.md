@@ -46,11 +46,12 @@
   - Re-enabled both GitHub workflows via API.
   - Manual dispatch test succeeded for `Daily MLB Data Update` (run `24312929566`).
   - Manual dispatch test succeeded for `Process Daily Sword Videos` (run `24313189234`).
-  - Updated workflow files:
+  - Updated workflow files locally:
     - `actions/setup-python@v5`
     - concurrency groups
     - `PYTHONUNBUFFERED=1`
     - workflow-run success gate for video workflow
+  - Workflow file push is pending `workflow` OAuth scope (current token cannot update `.github/workflows/*`).
   - Added `PROCESS_DATE_OVERRIDE` to `process_daily_sword_videos.py` and verified no-games date exits cleanly.
 - Phase 5 complete (initial frontend ship):
   - Built static vanilla JS + Tailwind pages:
