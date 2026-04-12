@@ -21,8 +21,8 @@ python3 -m http.server 3000
 
 ## Config
 Runtime config is in `assets/config.js`:
-- `supabaseUrl`
-- `supabaseAnonKey`
+- `apiBaseUrl` (preferred, points to Railway API)
+- `supabaseUrl` + `supabaseAnonKey` (optional fallback if no API URL is provided)
 - `seasonYear`
 
 To override in production, define `window.SWORDFINDER_CONFIG` before loading app modules.
@@ -35,5 +35,5 @@ Deploy `ui/` as the project root.
 
 ## Notes
 - No build step required.
-- Data is read directly from Supabase REST using anon key.
+- Data is read via Railway API (`/data/rows`, `/data/count`) by default.
 - Videos stream directly from Azure blob URLs stored in Supabase.

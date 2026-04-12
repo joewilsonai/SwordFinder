@@ -40,3 +40,13 @@
 - Decision: Keep requested files (`player/[id].html`, `pitcher/[id].html`) and use stable `profile.html` rewrite targets for runtime routing.
 - Why: Bracket-named files caused rewrite reliability issues under Vercel routing.
 - Impact: `/player/:id` and `/pitcher/:id` now resolve successfully in production.
+
+## 8) API-first frontend reads for 2026 production
+- Decision: Move UI reads to Railway API (`/data/rows`, `/data/count`) as primary path; keep direct Supabase mode only as optional fallback.
+- Why: Browser-side anon reads are sensitive to RLS/policy drift and had inconsistent visibility in production.
+- Impact: Stable 2026 data rendering from server-managed credentials; public UI no longer requires embedded Supabase keys.
+
+## 9) Server-side Supabase credential preference
+- Decision: Prefer `SUPABASE_SERVICE_ROLE_KEY` for backend reads, fallback to anon only if service role key is absent.
+- Why: Backend needs consistent, policy-independent read access for public endpoints and UI aggregation.
+- Impact: `/health`, `/swords/*`, and `/data/*` endpoints return live 2026 data reliably.

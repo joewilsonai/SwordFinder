@@ -71,3 +71,34 @@
 - Write `DECISIONS_2026.md` and `FINAL_REPORT_2026.md`.
 - Optional: attach custom domain in Vercel dashboard (not configured in repo/CLI yet).
 - Optional hardening: remove/rotate leaked public anon key from `TODO.md` and migrate UI config to env-injected runtime.
+
+---
+
+## 2026-04-12 16:47 CDT
+
+### Completed
+- Deployed backend to Railway project `swordfinder` and attached production domain:
+  - `https://swordfinder-production.up.railway.app`
+- Added explicit process start for Railway via `Procfile` (`gunicorn` + `uvicorn` worker).
+- Fixed backend health check logic to report DB connectivity correctly.
+- Switched backend Supabase auth to prefer `SUPABASE_SERVICE_ROLE_KEY` (fallback to anon only if missing).
+- Added API-first data endpoints for static UI:
+  - `GET /data/rows`
+  - `GET /data/count`
+  - Supports safe read-only filtering for `mlb_pitches_enhanced`.
+- Set Railway env vars required for production reads:
+  - `SUPABASE_URL`
+  - `SUPABASE_ANON_KEY`
+  - `SUPABASE_SERVICE_ROLE_KEY`
+  - `CORS_ORIGINS`
+- Verified live 2026 API data:
+  - `/data/count?...game_date=2026...&sword_score=gt.0` returned `8236`
+- Updated UI to use Railway API by default (no direct Supabase key required in browser):
+  - `ui/assets/config.js` now uses `apiBaseUrl`
+  - `ui/assets/supabase-rest.js` routes `fetchRows`/`fetchCount` through API when `apiBaseUrl` is set
+- Redeployed UI to Vercel production alias:
+  - `https://ui-one-henna.vercel.app`
+- Verified CORS allows UI origin on Railway API.
+
+### Notes
+- Legacy API routes (`/swords/*`) were failing due strict response typing on nullable fields; model was relaxed and endpoint now returns data successfully.

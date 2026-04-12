@@ -1,4 +1,5 @@
 const cfg = window.SWORDFINDER_CONFIG || {};
+const API_BASE_URL = (cfg.apiBaseUrl || '').replace(/\/$/, '');
 
 const SUPABASE_URL = (cfg.supabaseUrl || '').replace(/\/$/, '');
 const SUPABASE_ANON_KEY = cfg.supabaseAnonKey || '';
@@ -31,6 +32,20 @@ function buildQuery(params = {}) {
 }
 
 export async function fetchRows(table, params = {}, options = {}) {
+  if (API_BASE_URL) {
+    const query = buildQuery({ table, ...params });
+    const url = `${API_BASE_URL}/data/rows${query ? `?${query}` : ''}`;
+    const response = await fetch(url, {
+      method: 'GET',
+      signal: options.signal,
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`API rows request failed (${response.status}): ${text}`);
+    }
+    return response.json();
+  }
+
   const query = buildQuery(params);
   const headers = { ...BASE_HEADERS, ...(options.headers || {}) };
   const url = `${SUPABASE_URL}/rest/v1/${table}${query ? `?${query}` : ''}`;
@@ -50,6 +65,22 @@ export async function fetchRows(table, params = {}, options = {}) {
 }
 
 export async function fetchCount(table, params = {}, options = {}) {
+  if (API_BASE_URL) {
+    const query = buildQuery({ table, ...params });
+    const url = `${API_BASE_URL}/data/count${query ? `?${query}` : ''}`;
+    const response = await fetch(url, {
+      method: 'GET',
+      signal: options.signal,
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`API count request failed (${response.status}): ${text}`);
+    }
+    const payload = await response.json();
+    const total = Number(payload?.count ?? 0);
+    return Number.isFinite(total) ? total : 0;
+  }
+
   const query = buildQuery(params);
   const headers = {
     ...BASE_HEADERS,

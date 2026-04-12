@@ -3,14 +3,15 @@
 SwordFinder API - FastAPI backend for sword swing videos
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime
 import os
 from supabase import create_client
 from dotenv import load_dotenv
+from env_config import get_env
 
 # Load environment variables
 load_dotenv()
@@ -22,38 +23,50 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS configuration for local development
+# CORS configuration (supports local dev + deployed UI; override via CORS_ORIGINS)
+default_cors_origins = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "https://ui-one-henna.vercel.app",
+]
+
+cors_origins_raw = os.getenv("CORS_ORIGINS", ",".join(default_cors_origins))
+cors_origins = [origin.strip() for origin in cors_origins_raw.split(",") if origin.strip()]
+allow_credentials = "*" not in cors_origins
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],  # React/Vite defaults
-    allow_credentials=True,
+    allow_origins=cors_origins,
+    allow_credentials=allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Initialize Supabase client
-supabase_url = os.getenv('SUPABASE_URL')
-supabase_key = os.getenv('SUPABASE_ANON_KEY')  # Use anon key for API
+# Initialize Supabase client (prefer service role for server-side reads)
+supabase_url = get_env("SUPABASE_URL")
+supabase_key = get_env("SUPABASE_SERVICE_ROLE_KEY") or get_env("SUPABASE_ANON_KEY")
 
 if not supabase_url or not supabase_key:
-    raise ValueError("Missing Supabase credentials in environment")
+    raise ValueError("Missing SUPABASE_URL and/or API key in environment")
 
 supabase = create_client(supabase_url, supabase_key)
+ALLOWED_TABLES = {"mlb_pitches_enhanced"}
+RESERVED_QUERY_KEYS = {"table", "select", "order", "limit", "offset"}
 
 # Pydantic models
 class SwordSwing(BaseModel):
-    id: int
-    player_name: str
-    pitcher_name: str
-    game_date: str
-    bat_speed: float
-    sword_score: float
-    pitch_type: str
-    release_speed: float
+    id: Optional[int] = None
+    player_name: Optional[str] = None
+    pitcher_name: Optional[str] = None
+    game_date: Optional[str] = None
+    bat_speed: Optional[float] = None
+    sword_score: Optional[float] = None
+    pitch_type: Optional[str] = None
+    release_speed: Optional[float] = None
     video_azure_blob_url: Optional[str]
     perceived_velocity: Optional[float]
     strike_zone_distance_inches: Optional[float]
-    description: str
+    description: Optional[str] = None
 
 class HealthResponse(BaseModel):
     status: str
@@ -61,15 +74,114 @@ class HealthResponse(BaseModel):
     project: str
     timestamp: str
 
+
+def _apply_filter(query, column: str, expression: str):
+    parts = expression.split(".")
+    op = parts[0]
+    rhs = ".".join(parts[1:]) if len(parts) > 1 else ""
+
+    if op == "eq":
+        return query.eq(column, rhs)
+    if op == "gt":
+        return query.gt(column, rhs)
+    if op == "gte":
+        return query.gte(column, rhs)
+    if op == "lt":
+        return query.lt(column, rhs)
+    if op == "lte":
+        return query.lte(column, rhs)
+    if op == "ilike":
+        return query.ilike(column, rhs)
+    if op == "is":
+        return query.is_(column, rhs)
+    if op == "not" and len(parts) >= 3 and parts[1] == "is":
+        return query.not_.is_(column, ".".join(parts[2:]))
+
+    raise ValueError(f"Unsupported filter expression: {column}={expression}")
+
+
+def _apply_order(query, order_expr: str):
+    for clause in order_expr.split(","):
+        clause = clause.strip()
+        if not clause:
+            continue
+        col, _, direction = clause.partition(".")
+        query = query.order(col, desc=direction.lower() == "desc")
+    return query
+
+
+def _validate_table(table: str):
+    if table not in ALLOWED_TABLES:
+        raise HTTPException(status_code=400, detail=f"Table not allowed: {table}")
+
+
+@app.get("/data/rows")
+async def get_rows(
+    request: Request,
+    table: str = "mlb_pitches_enhanced",
+    select: str = "*",
+    order: Optional[str] = None,
+    limit: int = 100,
+    offset: int = 0,
+):
+    """Read-only query endpoint used by static UI pages."""
+    _validate_table(table)
+    limit = max(1, min(limit, 1000))
+    offset = max(0, offset)
+
+    try:
+        query = supabase.table(table).select(select)
+
+        for key, value in request.query_params.multi_items():
+            if key in RESERVED_QUERY_KEYS:
+                continue
+            query = _apply_filter(query, key, value)
+
+        if order:
+            query = _apply_order(query, order)
+
+        query = query.range(offset, offset + limit - 1)
+        result = query.execute()
+        return result.data
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/data/count")
+async def get_count(
+    request: Request,
+    table: str = "mlb_pitches_enhanced",
+    select: str = "id",
+):
+    """Count rows using the same filter syntax as /data/rows."""
+    _validate_table(table)
+
+    try:
+        query = supabase.table(table).select(select, count="exact")
+
+        for key, value in request.query_params.multi_items():
+            if key in RESERVED_QUERY_KEYS:
+                continue
+            query = _apply_filter(query, key, value)
+
+        result = query.limit(1).execute()
+        return {"count": result.count or 0}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
 # Endpoints
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
     """Check API and database health"""
     try:
-        # Test database connection
-        result = supabase.table('mlb_pitches_enhanced').select('id').limit(1).execute()
-        db_status = "connected" if result.data else "error"
-    except:
+        # If this query executes without raising, the connection is healthy.
+        supabase.table('mlb_pitches_enhanced').select('id').limit(1).execute()
+        db_status = "connected"
+    except Exception:
         db_status = "error"
     
     return {
