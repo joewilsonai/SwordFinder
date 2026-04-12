@@ -15,6 +15,7 @@ from dotenv import load_dotenv
 import logging
 from typing import Optional, List
 from update_percentiles_daily import DailyPercentileUpdater
+from env_config import get_env
 
 # Set up logging
 logging.basicConfig(
@@ -192,8 +193,8 @@ def upload_to_supabase(df: pd.DataFrame) -> bool:
     """Upload data to Supabase, handling duplicates"""
     load_dotenv()
     
-    supabase_url = os.getenv('SUPABASE_URL')
-    supabase_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+    supabase_url = get_env('SUPABASE_URL')
+    supabase_key = get_env('SUPABASE_SERVICE_ROLE_KEY')
     
     if not supabase_url or not supabase_key:
         logging.error("Missing Supabase credentials")
@@ -258,8 +259,8 @@ def update_percentiles_for_date(date_str: str) -> bool:
     try:
         load_dotenv()
         
-        supabase_url = os.getenv('SUPABASE_URL')
-        supabase_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+        supabase_url = get_env('SUPABASE_URL')
+        supabase_key = get_env('SUPABASE_SERVICE_ROLE_KEY')
         
         if not supabase_url or not supabase_key:
             logging.error("Missing Supabase credentials for percentile update")
@@ -288,8 +289,8 @@ def check_if_date_exists(date_str: str) -> bool:
     """Check if data for a specific date already exists in the database"""
     load_dotenv()
     
-    supabase_url = os.getenv('SUPABASE_URL')
-    supabase_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+    supabase_url = get_env('SUPABASE_URL')
+    supabase_key = get_env('SUPABASE_SERVICE_ROLE_KEY')
     
     if not supabase_url or not supabase_key:
         return False

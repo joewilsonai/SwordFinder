@@ -1,0 +1,17 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "cleanUrls": true,
+  "routes": [
+    {
+      "src": "^/player/([^/]+)$",
+      "dest": "/player/profile?id=$1"
+    },
+    {
+      "src": "^/pitcher/([^/]+)$",
+      "dest": "/pitcher/profile?id=$1"
+    },
+    {
+      "handle": "filesystem"
+    }
+  ]
+}

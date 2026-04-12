@@ -1,20 +1,35 @@
 #!/usr/bin/env python3
 """
-Process only top 5 videos per day (skips score upload)
+Process top sword videos per day (skips score upload).
+Supports dynamic season defaults and dry-run validation.
 """
 
-import os
-import pandas as pd
-from datetime import datetime, timedelta
-from supabase import create_client
-from dotenv import load_dotenv
-from get_play_ids_on_demand import get_play_ids_for_pitches
-from clean_video_processor import EnhancedSwordVideoProcessor
+import argparse
 import logging
+import os
 import time
+from datetime import datetime, timedelta
+
+import pandas as pd
+from dotenv import load_dotenv
+from supabase import create_client
+
+from clean_video_processor import EnhancedSwordVideoProcessor
+from env_config import get_env
+from get_play_ids_on_demand import get_play_ids_for_pitches
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+KNOWN_OPENING_DAYS = {
+    2025: datetime(2025, 3, 20),
+    2026: datetime(2026, 3, 25),
+}
+
+
+def get_default_start_date(season_year):
+    return KNOWN_OPENING_DAYS.get(season_year, datetime(season_year, 3, 25))
+
 
 def process_videos_for_date(date_str, supabase, video_processor, n_videos=5):
     """Process top N videos for a specific date"""
@@ -90,88 +105,154 @@ def process_videos_for_date(date_str, supabase, video_processor, n_videos=5):
     logger.info(f"Processed {processed} videos for {date_str} (checked {checked} candidates)")
     return processed
 
+
+def parse_cli_args():
+    yesterday = datetime.now() - timedelta(days=1)
+    parser = argparse.ArgumentParser(description="Process top sword videos by date/date-range.")
+    parser.add_argument(
+        "--mode",
+        choices=["interactive", "last7", "specific", "range", "season"],
+        default="interactive",
+    )
+    parser.add_argument("--season-year", type=int, default=datetime.now().year)
+    parser.add_argument("--date", type=str, default=None, help="Specific date for --mode specific")
+    parser.add_argument("--start-date", type=str, default=None, help="Start date for --mode range")
+    parser.add_argument("--end-date", type=str, default=yesterday.strftime("%Y-%m-%d"))
+    parser.add_argument("--videos-per-day", type=int, default=5)
+    parser.add_argument("--dry-run", action="store_true", help="Print planned dates only.")
+    return parser.parse_args()
+
+
+def build_dates_from_args(args):
+    dates_to_process = []
+    end_date = datetime.strptime(args.end_date, "%Y-%m-%d")
+
+    if args.mode == "last7":
+        for i in range(7):
+            date = end_date - timedelta(days=i)
+            dates_to_process.append(date.strftime("%Y-%m-%d"))
+    elif args.mode == "specific":
+        if not args.date:
+            raise ValueError("--date is required for --mode specific")
+        dates_to_process.append(args.date)
+    elif args.mode == "range":
+        if not args.start_date:
+            raise ValueError("--start-date is required for --mode range")
+        start_date = datetime.strptime(args.start_date, "%Y-%m-%d")
+        current = start_date
+        while current <= end_date:
+            dates_to_process.append(current.strftime("%Y-%m-%d"))
+            current += timedelta(days=1)
+    elif args.mode == "season":
+        current = get_default_start_date(args.season_year)
+        while current <= end_date:
+            dates_to_process.append(current.strftime("%Y-%m-%d"))
+            current += timedelta(days=1)
+    else:
+        # interactive mode handled elsewhere
+        pass
+
+    return dates_to_process
+
+
+def interactive_dates(season_year):
+    print("\nOptions:")
+    print("1. Process last 7 days")
+    print("2. Process specific date (e.g., 2026-04-10)")
+    print("3. Process date range")
+    print("4. Process full season to yesterday")
+
+    choice = input("\nEnter choice (1-4): ").strip()
+    dates_to_process = []
+    yesterday = datetime.now() - timedelta(days=1)
+
+    if choice == "1":
+        for i in range(7):
+            date = yesterday - timedelta(days=i)
+            dates_to_process.append(date.strftime("%Y-%m-%d"))
+    elif choice == "2":
+        date_str = input("Enter date (YYYY-MM-DD): ").strip()
+        dates_to_process.append(date_str)
+    elif choice == "3":
+        start_str = input("Enter start date (YYYY-MM-DD): ").strip()
+        end_str = input("Enter end date (YYYY-MM-DD): ").strip()
+        start_date = datetime.strptime(start_str, "%Y-%m-%d")
+        end_date = datetime.strptime(end_str, "%Y-%m-%d")
+
+        current = start_date
+        while current <= end_date:
+            dates_to_process.append(current.strftime("%Y-%m-%d"))
+            current += timedelta(days=1)
+    else:
+        current = get_default_start_date(season_year)
+        while current <= yesterday:
+            dates_to_process.append(current.strftime("%Y-%m-%d"))
+            current += timedelta(days=1)
+
+    return dates_to_process
+
+
 def main():
-    """Process videos for a date range or specific dates"""
+    """Process videos for a date range or specific dates."""
+    args = parse_cli_args()
+
+    if args.mode == "interactive":
+        dates_to_process = interactive_dates(args.season_year)
+    else:
+        dates_to_process = build_dates_from_args(args)
+
+    if not dates_to_process:
+        print("No dates selected.")
+        return
+
+    if args.dry_run:
+        print("🧪 Dry run complete. Planned date processing:")
+        print(f"   - Dates: {len(dates_to_process)}")
+        print(f"   - First date: {dates_to_process[0]}")
+        print(f"   - Last date: {dates_to_process[-1]}")
+        print(f"   - Videos per day: {args.videos_per_day}")
+        return
+
     load_dotenv()
-    
-    # Initialize
-    supabase_url = os.getenv('SUPABASE_URL')
-    supabase_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
-    
+
+    supabase_url = get_env('SUPABASE_URL')
+    supabase_key = get_env('SUPABASE_SERVICE_ROLE_KEY')
+
     if not supabase_url or not supabase_key:
         logger.error("Missing Supabase credentials")
         return
-    
+
     supabase = create_client(supabase_url, supabase_key)
     video_processor = EnhancedSwordVideoProcessor()
-    
+
     print("🗡️ SwordFinder Video Processor (Videos Only)")
     print("=" * 50)
-    
-    # Option to process specific dates or date range
-    print("\nOptions:")
-    print("1. Process last 7 days")
-    print("2. Process specific date (e.g., 2025-06-20)")
-    print("3. Process date range")
-    print("4. Process full season (March 20 - June 21)")
-    
-    choice = input("\nEnter choice (1-4): ").strip()
-    
-    dates_to_process = []
-    
-    if choice == "1":
-        # Last 7 days
-        end_date = datetime(2025, 6, 21)
-        for i in range(7):
-            date = end_date - timedelta(days=i)
-            dates_to_process.append(date.strftime('%Y-%m-%d'))
-    
-    elif choice == "2":
-        # Specific date
-        date_str = input("Enter date (YYYY-MM-DD): ").strip()
-        dates_to_process.append(date_str)
-    
-    elif choice == "3":
-        # Date range
-        start_str = input("Enter start date (YYYY-MM-DD): ").strip()
-        end_str = input("Enter end date (YYYY-MM-DD): ").strip()
-        start_date = datetime.strptime(start_str, '%Y-%m-%d')
-        end_date = datetime.strptime(end_str, '%Y-%m-%d')
-        
-        current = start_date
-        while current <= end_date:
-            dates_to_process.append(current.strftime('%Y-%m-%d'))
-            current += timedelta(days=1)
-    
-    else:
-        # Full season
-        start_date = datetime(2025, 3, 20)
-        end_date = datetime(2025, 6, 21)
-        
-        current = start_date
-        while current <= end_date:
-            dates_to_process.append(current.strftime('%Y-%m-%d'))
-            current += timedelta(days=1)
-    
-    # Process the dates
+
     total_videos = 0
     print(f"\n📹 Processing {len(dates_to_process)} days...")
-    
+
     for date_str in dates_to_process:
         print(f"\n📅 Processing {date_str}...")
-        videos = process_videos_for_date(date_str, supabase, video_processor)
+        videos = process_videos_for_date(
+            date_str,
+            supabase,
+            video_processor,
+            n_videos=args.videos_per_day,
+        )
         total_videos += videos
-        
-        # Progress
-        print(f"Progress: {dates_to_process.index(date_str)+1}/{len(dates_to_process)} days, {total_videos} videos total")
-    
-    # Summary
+
+        print(
+            f"Progress: {dates_to_process.index(date_str)+1}/{len(dates_to_process)} days, "
+            f"{total_videos} videos total"
+        )
+
     print("\n" + "=" * 50)
     print("✅ Processing Complete!")
     print(f"   - Days processed: {len(dates_to_process)}")
     print(f"   - Total videos: {total_videos}")
     if total_videos > 0:
         print(f"   - Average per day: {total_videos/len(dates_to_process):.1f}")
+
 
 if __name__ == "__main__":
     main()

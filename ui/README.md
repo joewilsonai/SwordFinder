@@ -1,0 +1,39 @@
+# SwordFinder UI (2026)
+
+Static frontend for SwordFinder using vanilla JavaScript + Tailwind CDN.
+
+## Pages
+- `/index.html` - latest sword slate with autoplay-muted clips
+- `/leaderboards.html` - weekly / monthly / season leaderboards
+- `/player/[id].html` - hitter sword profile
+- `/pitcher/[id].html` - pitcher sword-inducer profile
+
+## Local run
+1. From `ui/` run:
+```bash
+python3 -m http.server 3000
+```
+2. Open:
+- http://localhost:3000/index.html
+- http://localhost:3000/leaderboards.html
+- http://localhost:3000/player/[id].html?id=571970
+- http://localhost:3000/pitcher/[id].html?id=592332
+
+## Config
+Runtime config is in `assets/config.js`:
+- `supabaseUrl`
+- `supabaseAnonKey`
+- `seasonYear`
+
+To override in production, define `window.SWORDFINDER_CONFIG` before loading app modules.
+
+## Vercel deployment
+Deploy `ui/` as the project root.
+- `vercel.json` includes rewrites for:
+  - `/player/:id` -> `/player/[id].html`
+  - `/pitcher/:id` -> `/pitcher/[id].html`
+
+## Notes
+- No build step required.
+- Data is read directly from Supabase REST using anon key.
+- Videos stream directly from Azure blob URLs stored in Supabase.

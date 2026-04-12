@@ -3,16 +3,44 @@
 Correctly upload MLB data with proper float handling
 """
 
+import argparse
+from datetime import datetime
 import pandas as pd
 import os
 from dotenv import load_dotenv
 from supabase import create_client
 from tqdm import tqdm
 import numpy as np
-import json
+from env_config import get_env
 
 # Load environment variables
 load_dotenv()
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Upload season CSV data to Supabase.")
+    parser.add_argument("--year", type=int, default=datetime.now().year)
+    parser.add_argument("--input-file", type=str, default=None)
+    parser.add_argument("--dry-run", action="store_true", help="Validate and preview only.")
+    parser.add_argument(
+        "--auto-confirm",
+        action="store_true",
+        help="Skip interactive confirmation before full upload.",
+    )
+    return parser.parse_args()
+
+
+def resolve_input_file(year, input_file):
+    if input_file:
+        return input_file
+    candidate = f"mlb_{year}_full_season_complete.csv"
+    if os.path.exists(candidate):
+        return candidate
+    if year == 2025 and os.path.exists("mlb_2025_full_season_complete.csv"):
+        return "mlb_2025_full_season_complete.csv"
+    raise FileNotFoundError(
+        f"Could not find {candidate}. Use --input-file to specify a CSV."
+    )
 
 def clean_value(value):
     """Clean a single value for PostgreSQL/JSON"""
@@ -109,34 +137,42 @@ def prepare_data(df):
 
 def main():
     """Main upload function"""
+    args = parse_args()
     print("🚀 MLB DATA UPLOAD - CORRECT VERSION")
     print("=" * 60)
-    
+
     # Connect
-    supabase_url = os.getenv("SUPABASE_URL")
-    supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_ANON_KEY")
-    
+    supabase_url = get_env("SUPABASE_URL")
+    supabase_key = get_env("SUPABASE_SERVICE_ROLE_KEY") or get_env("SUPABASE_ANON_KEY")
+
     if not supabase_url or not supabase_key:
         print("❌ Missing credentials!")
         return
-    
-    print("🔌 Connecting to Supabase...")
-    supabase = create_client(supabase_url, supabase_key)
-    print("✅ Connected!")
-    
+
+    input_file = resolve_input_file(args.year, args.input_file)
+    print(f"📄 Input CSV: {input_file}")
+
+    if args.dry_run:
+        print("🧪 Dry run mode enabled (no database writes).")
+        supabase = None
+    else:
+        print("🔌 Connecting to Supabase...")
+        supabase = create_client(supabase_url, supabase_key)
+        print("✅ Connected!")
+
     # Load data
     print("\n📊 Loading MLB data...")
-    df = pd.read_csv('mlb_2025_full_season_complete.csv', low_memory=False)
+    df = pd.read_csv(input_file, low_memory=False)
     print(f"✅ Loaded {len(df):,} pitches")
-    
+
     # Prepare data
     clean_df = prepare_data(df)
     print(f"✅ Prepared {len(clean_df.columns)} columns")
-    
+
     # Convert to records and clean
     print("\n🧹 Converting to clean records...")
     records = clean_df.to_dict('records')
-    
+
     # Clean each record
     clean_records = []
     for i, record in enumerate(records[:10]):  # Test with first 10
@@ -144,65 +180,71 @@ def main():
         for key, value in record.items():
             clean_record[key] = clean_value(value)
         clean_records.append(clean_record)
-    
-    # Test upload
-    print("\n📤 Testing with 5 records...")
+
+    print("\n📤 Prepared sample batch (first 5 records).")
     test_batch = clean_records[:5]
-    
+
     # Debug: show data types
     print("\n🔍 Data types in first record:")
     for k, v in test_batch[0].items():
         if v is not None:
             print(f"   {k}: {v} ({type(v).__name__})")
-    
+
+    if args.dry_run:
+        print("\n✅ Dry run complete.")
+        return
+
     try:
         result = supabase.table('mlb_pitches_enhanced').insert(test_batch).execute()
         print("\n✅ Test successful! 5 records inserted.")
-        
+
         # Ask to continue
-        response = input("\nUpload all 353,501 records? (yes/no): ")
-        
+        if args.auto_confirm:
+            response = "yes"
+        else:
+            response = input("\nUpload full dataset now? (yes/no): ")
+
         if response.lower() == 'yes':
             # Process all records
             print("\n🧹 Processing all records...")
             all_clean_records = []
-            
+
             for record in tqdm(records, desc="Cleaning records"):
                 clean_record = {}
                 for key, value in record.items():
                     clean_record[key] = clean_value(value)
                 all_clean_records.append(clean_record)
-            
+
             # Upload in batches
             batch_size = 1000
             failed = []
             successful = 0
-            
+
             print(f"\n📤 Uploading {len(all_clean_records):,} records in batches...")
             for i in tqdm(range(0, len(all_clean_records), batch_size), desc="Uploading"):
-                batch = all_clean_records[i:i+batch_size]
+                batch = all_clean_records[i:i + batch_size]
                 try:
                     supabase.table('mlb_pitches_enhanced').insert(batch).execute()
                     successful += len(batch)
                 except Exception as e:
                     failed.append((i, str(e)[:100]))
-            
+
             print(f"\n✅ Upload complete!")
             print(f"   Successful: {successful:,} records")
             print(f"   Failed batches: {len(failed)}")
-            
+
             if failed:
                 print("\nFirst few errors:")
                 for i, err in failed[:3]:
                     print(f"   Batch {i//batch_size}: {err}")
-            
+
     except Exception as e:
         print(f"\n❌ Test upload failed: {e}")
-        
+
         # Try to parse the error
         if "invalid input syntax" in str(e):
             print("\n💡 Hint: Check that your Supabase table schema matches the data types")
-        
+
         # Debug problematic values
         print("\n🔍 Checking for problematic values...")
         for record in test_batch[:1]:

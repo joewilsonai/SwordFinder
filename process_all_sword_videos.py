@@ -1,56 +1,84 @@
 #!/usr/bin/env python3
 """
-Process all sword videos for the entire 2025 season
+Process all sword videos for an MLB season.
 - Upload sword scores to Supabase
-- Download top 5 videos per day
+- Download top N videos per day
 - Upload to Azure and update database
 """
 
-import os
-import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
-from supabase import create_client
-from dotenv import load_dotenv
-from get_play_ids_on_demand import get_play_ids_for_pitches
-from clean_video_processor import EnhancedSwordVideoProcessor
+import argparse
 import logging
+import os
 import time
+from datetime import datetime, timedelta
+from pathlib import Path
+
+import pandas as pd
+from dotenv import load_dotenv
+from supabase import create_client
+
+from clean_video_processor import EnhancedSwordVideoProcessor
+from env_config import get_env
+from get_play_ids_on_demand import get_play_ids_for_pitches
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def upload_sword_scores_to_supabase():
-    """Upload all sword scores from CSV to Supabase"""
+KNOWN_OPENING_DAYS = {
+    2025: datetime(2025, 3, 20),
+    2026: datetime(2026, 3, 25),
+}
+
+
+def get_known_opening_day(year):
+    return KNOWN_OPENING_DAYS.get(year, datetime(year, 3, 25))
+
+
+def resolve_scores_csv(year, csv_path=None):
+    if csv_path:
+        return csv_path
+    candidate = Path(f"mlb_{year}_with_sword_scores.csv")
+    if candidate.exists():
+        return str(candidate)
+    if year == 2025 and Path("mlb_2025_with_sword_scores.csv").exists():
+        return "mlb_2025_with_sword_scores.csv"
+    raise FileNotFoundError(
+        f"Expected score CSV {candidate.name} was not found. Use --scores-csv to override."
+    )
+
+
+def upload_sword_scores_to_supabase(scores_csv, dry_run=False):
+    """Upload all sword scores from CSV to Supabase."""
     load_dotenv()
-    
-    supabase_url = os.getenv('SUPABASE_URL')
-    supabase_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
-    
+
+    supabase_url = get_env('SUPABASE_URL')
+    supabase_key = get_env('SUPABASE_SERVICE_ROLE_KEY')
+
     if not supabase_url or not supabase_key:
         logger.error("Missing Supabase credentials")
         return False
-    
+
     supabase = create_client(supabase_url, supabase_key)
-    
+
     logger.info("📊 Loading CSV with sword scores...")
-    df = pd.read_csv('mlb_2025_with_sword_scores.csv', low_memory=False)
-    
-    # Get only records with sword scores
+    logger.info(f"Using score file: {scores_csv}")
+    df = pd.read_csv(scores_csv, low_memory=False)
+
     sword_df = df[df['sword_score'].notna()].copy()
     logger.info(f"Found {len(sword_df)} sword candidates to update")
-    
-    # Update in batches
+
+    if dry_run:
+        logger.info("🧪 Dry run enabled. Skipping Supabase sword score updates.")
+        return True
+
     batch_size = 100
     updated = 0
-    
+
     for i in range(0, len(sword_df), batch_size):
-        batch = sword_df.iloc[i:i+batch_size]
-        
+        batch = sword_df.iloc[i:i + batch_size]
+
         try:
-            # Update each record
             for _, row in batch.iterrows():
-                # Find matching record by game_pk, at_bat_number, pitch_number
                 result = supabase.table('mlb_pitches_enhanced')\
                     .update({
                         'sword_score': float(row['sword_score']),
@@ -61,14 +89,14 @@ def upload_sword_scores_to_supabase():
                     .eq('at_bat_number', int(row['at_bat_number']))\
                     .eq('pitch_number', int(row['pitch_number']))\
                     .execute()
-                
+
                 updated += 1
-                
+
             logger.info(f"Updated {updated}/{len(sword_df)} sword scores")
-            
+
         except Exception as e:
             logger.error(f"Error updating batch: {e}")
-    
+
     logger.info(f"✅ Finished updating {updated} sword scores")
     return True
 
@@ -146,72 +174,114 @@ def process_videos_for_date(date_str, supabase, video_processor, n_videos=5):
     logger.info(f"Processed {processed} videos for {date_str} (checked {checked} candidates)")
     return processed
 
+
+def parse_args():
+    yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+    parser = argparse.ArgumentParser(description="Process season sword videos.")
+    parser.add_argument('--season-year', type=int, default=datetime.now().year)
+    parser.add_argument('--scores-csv', type=str, default=None)
+    parser.add_argument('--start-date', type=str, default=None)
+    parser.add_argument('--end-date', type=str, default=yesterday)
+    parser.add_argument('--videos-per-day', type=int, default=5)
+    parser.add_argument('--skip-score-upload', action='store_true')
+    parser.add_argument('--dry-run', action='store_true', help='Print plan only.')
+    return parser.parse_args()
+
+
 def main():
-    """Process all sword videos for the season"""
+    """Process all sword videos for the selected season."""
+    args = parse_args()
     load_dotenv()
-    
-    # Initialize
-    supabase_url = os.getenv('SUPABASE_URL')
-    supabase_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
-    
+
+    supabase_url = get_env('SUPABASE_URL')
+    supabase_key = get_env('SUPABASE_SERVICE_ROLE_KEY')
+
     if not supabase_url or not supabase_key:
         logger.error("Missing Supabase credentials")
         return
-    
+
     supabase = create_client(supabase_url, supabase_key)
     video_processor = EnhancedSwordVideoProcessor()
-    
+
     print("🗡️ SwordFinder Season Video Processor")
     print("=" * 50)
-    
-    # Step 1: Upload sword scores
-    print("\n📊 Step 1: Uploading sword scores to Supabase...")
-    if not upload_sword_scores_to_supabase():
-        print("❌ Failed to upload scores. Exiting.")
+
+    try:
+        scores_csv = resolve_scores_csv(args.season_year, args.scores_csv)
+    except FileNotFoundError as exc:
+        if args.dry_run:
+            scores_csv = args.scores_csv or f"mlb_{args.season_year}_with_sword_scores.csv"
+            print(f"⚠️  {exc}")
+        else:
+            raise
+    start_date = (
+        datetime.strptime(args.start_date, '%Y-%m-%d')
+        if args.start_date
+        else get_known_opening_day(args.season_year)
+    )
+    end_date = datetime.strptime(args.end_date, '%Y-%m-%d')
+
+    if start_date > end_date:
+        print(f"No work to do: start date {start_date.date()} is after end date {end_date.date()}.")
         return
-    
-    # Step 2: Process videos
-    print("\n📹 Step 2: Processing videos for each day...")
-    
-    # Get date range
-    start_date = datetime(2025, 3, 20)
-    end_date = datetime(2025, 6, 21)
-    
+
     total_days = (end_date - start_date).days + 1
+
+    if args.dry_run:
+        print("🧪 Dry run complete. No score updates or video processing executed.")
+        print(f"   - Season year: {args.season_year}")
+        print(f"   - Score CSV: {scores_csv}")
+        print(f"   - Start date: {start_date.date()}")
+        print(f"   - End date: {end_date.date()}")
+        print(f"   - Days in range: {total_days}")
+        print(f"   - Videos/day target: {args.videos_per_day}")
+        return
+
+    if not args.skip_score_upload:
+        print("\n📊 Step 1: Uploading sword scores to Supabase...")
+        if not upload_sword_scores_to_supabase(scores_csv, dry_run=args.dry_run):
+            print("❌ Failed to upload scores. Exiting.")
+            return
+    else:
+        print("\n⏭️ Skipping score upload (--skip-score-upload)")
+
+    print("\n📹 Step 2: Processing videos for each day...")
     total_videos = 0
     days_with_videos = 0
-    
-    # Process each day
+
     current_date = start_date
     while current_date <= end_date:
         date_str = current_date.strftime('%Y-%m-%d')
         print(f"\n📅 Processing {date_str}...")
-        
-        videos = process_videos_for_date(date_str, supabase, video_processor)
+
+        videos = process_videos_for_date(
+            date_str,
+            supabase,
+            video_processor,
+            n_videos=args.videos_per_day,
+        )
         total_videos += videos
         if videos > 0:
             days_with_videos += 1
-        
+
         current_date += timedelta(days=1)
-        
-        # Progress update
+
         days_done = (current_date - start_date).days
         print(f"Progress: {days_done}/{total_days} days, {total_videos} videos total")
-    
-    # Summary
+
     print("\n" + "=" * 50)
     print("✅ Season Processing Complete!")
     print(f"   - Days processed: {total_days}")
     print(f"   - Days with videos: {days_with_videos}")
     print(f"   - Total videos: {total_videos}")
-    print(f"   - Average per day: {total_videos/days_with_videos:.1f}")
-    
-    # Get some stats from database
+    if days_with_videos > 0:
+        print(f"   - Average per day: {total_videos/days_with_videos:.1f}")
+
     stats = supabase.table('mlb_pitches_enhanced')\
         .select('sword_score')\
         .not_.is_('video_azure_blob_url', 'null')\
         .execute()
-    
+
     if stats.data:
         print(f"\n📊 Database Stats:")
         print(f"   - Videos in Azure: {len(stats.data)}")

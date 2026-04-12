@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 import logging
 from get_play_ids_on_demand import get_play_ids_for_pitches
 from clean_video_processor import EnhancedSwordVideoProcessor as MLBVideoProcessor
+from env_config import get_env
 
 # Set up logging
 logging.basicConfig(
@@ -73,8 +74,8 @@ def process_videos_for_swords(df: pd.DataFrame, date_str: str):
     video_processor = MLBVideoProcessor()
     load_dotenv()
     
-    supabase_url = os.getenv('SUPABASE_URL')
-    supabase_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY') or os.getenv('SUPABASE_ANON_KEY')
+    supabase_url = get_env('SUPABASE_URL')
+    supabase_key = get_env('SUPABASE_SERVICE_ROLE_KEY') or get_env('SUPABASE_ANON_KEY')
     
     if not supabase_url or not supabase_key:
         logging.error("Missing Supabase credentials")
@@ -138,17 +139,22 @@ def main():
     """Main execution"""
     logging.info("Starting daily sword video processing...")
     
-    # Get yesterday's date
-    yesterday = datetime.now() - timedelta(days=1)
-    date_str = yesterday.strftime('%Y-%m-%d')
+    # Get target date (defaults to yesterday). This keeps workflow behavior
+    # unchanged while allowing explicit no-games validation runs.
+    date_override = os.getenv("PROCESS_DATE_OVERRIDE")
+    if date_override:
+        date_str = date_override
+    else:
+        yesterday = datetime.now() - timedelta(days=1)
+        date_str = yesterday.strftime('%Y-%m-%d')
     
     logging.info(f"Processing videos for {date_str}")
     
     # Load environment
     load_dotenv()
     
-    supabase_url = os.getenv('SUPABASE_URL')
-    supabase_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY') or os.getenv('SUPABASE_ANON_KEY')
+    supabase_url = get_env('SUPABASE_URL')
+    supabase_key = get_env('SUPABASE_SERVICE_ROLE_KEY') or get_env('SUPABASE_ANON_KEY')
     
     if not supabase_url or not supabase_key:
         logging.error("Missing Supabase credentials")

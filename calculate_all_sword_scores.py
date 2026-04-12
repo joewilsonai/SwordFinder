@@ -3,15 +3,19 @@
 Calculate sword scores for all swinging strikes in the database
 """
 
+import argparse
 import os
 import pandas as pd
 from datetime import datetime
 from supabase import create_client
 from dotenv import load_dotenv
 import logging
+from env_config import get_env
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 def calculate_sword_score(row):
     """Calculate sword score based on multiple factors"""
@@ -53,23 +57,29 @@ def calculate_sword_score(row):
     
     return score if score > 0 else None
 
-def process_batch(supabase, offset, limit=1000):
-    """Process a batch of records"""
+def process_batch(supabase, limit=1000, year=None, last_id=None):
+    """Process one batch of unscored swinging strikes."""
     
     # Get swinging strikes without sword scores
-    result = supabase.table('mlb_pitches_enhanced')\
+    query = supabase.table('mlb_pitches_enhanced')\
         .select('*')\
         .in_('description', ['swinging_strike', 'swinging_strike_blocked'])\
         .is_('sword_score', 'null')\
         .order('id')\
-        .range(offset, offset + limit - 1)\
-        .execute()
+        .range(0, limit - 1)
+
+    if year is not None:
+        query = query.gte('game_date', f'{year}-01-01').lt('game_date', f'{year + 1}-01-01')
+    if last_id is not None:
+        query = query.gt('id', last_id)
+
+    result = query.execute()
     
     if not result.data:
-        return 0
+        return 0, 0, last_id
     
     df = pd.DataFrame(result.data)
-    logger.info(f"Processing batch: {len(df)} records from offset {offset}")
+    logger.info(f"Processing batch: {len(df)} records")
     
     # Calculate scores
     updates = []
@@ -81,24 +91,31 @@ def process_batch(supabase, offset, limit=1000):
                 'sword_score': round(score, 2)
             })
     
-    # Batch update
+    # Batch update in one request for performance.
     if updates:
-        for update in updates:
-            supabase.table('mlb_pitches_enhanced')\
-                .update({'sword_score': update['sword_score']})\
-                .eq('id', update['id'])\
-                .execute()
-        
+        supabase.table('mlb_pitches_enhanced').upsert(updates).execute()
         logger.info(f"Updated {len(updates)} records with sword scores")
     
-    return len(df)
+    return len(df), len(updates), int(df['id'].max())
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Calculate sword scores in Supabase.")
+    parser.add_argument(
+        "--year",
+        type=int,
+        default=None,
+        help="Optional season year filter (example: 2026).",
+    )
+    return parser.parse_args()
+
 
 def main():
-    """Calculate sword scores for entire database"""
+    """Calculate sword scores for the entire database or one year."""
+    args = parse_args()
     load_dotenv()
     
-    supabase_url = os.getenv('SUPABASE_URL')
-    supabase_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+    supabase_url = get_env('SUPABASE_URL')
+    supabase_key = get_env('SUPABASE_SERVICE_ROLE_KEY')
     
     if not supabase_url or not supabase_key:
         logger.error("Missing Supabase credentials")
@@ -108,13 +125,19 @@ def main():
     
     print("🗡️ Calculating Sword Scores for Entire Database")
     print("=" * 50)
+    if args.year is not None:
+        print(f"🎯 Year filter enabled: {args.year}")
     
     # Get total count of swinging strikes without scores
-    count_result = supabase.table('mlb_pitches_enhanced')\
+    count_query = supabase.table('mlb_pitches_enhanced')\
         .select('id', count='exact')\
         .in_('description', ['swinging_strike', 'swinging_strike_blocked'])\
-        .is_('sword_score', 'null')\
-        .execute()
+        .is_('sword_score', 'null')
+
+    if args.year is not None:
+        count_query = count_query.gte('game_date', f'{args.year}-01-01').lt('game_date', f'{args.year + 1}-01-01')
+
+    count_result = count_query.execute()
     
     total_to_process = count_result.count
     print(f"\n📊 Found {total_to_process:,} swinging strikes to process")
@@ -123,32 +146,47 @@ def main():
         print("✅ All sword scores already calculated!")
         return
     
-    # Process in batches
-    offset = 0
+    # Process in ID order so rows with null scores that remain null do not
+    # cause us to refetch the same page repeatedly.
     batch_size = 1000
+    last_id = None
     total_processed = 0
-    
-    while offset < total_to_process:
-        processed = process_batch(supabase, offset, batch_size)
+    total_updated = 0
+
+    while True:
+        processed, updated, max_id = process_batch(
+            supabase,
+            batch_size,
+            year=args.year,
+            last_id=last_id,
+        )
         if processed == 0:
             break
         
         total_processed += processed
-        offset += batch_size
-        
+        total_updated += updated
+        last_id = max_id
+
         # Progress
         pct = (total_processed / total_to_process) * 100
-        print(f"Progress: {total_processed:,}/{total_to_process:,} ({pct:.1f}%)")
+        print(
+            f"Progress: {total_processed:,}/{total_to_process:,} ({pct:.1f}%) | "
+            f"updated {total_updated:,}"
+        )
     
     # Summary stats
     print("\n" + "=" * 50)
     print("✅ Processing Complete!")
     
     # Get final stats
-    stats_result = supabase.table('mlb_pitches_enhanced')\
+    stats_query = supabase.table('mlb_pitches_enhanced')\
         .select('sword_score')\
-        .not_.is_('sword_score', 'null')\
-        .execute()
+        .not_.is_('sword_score', 'null')
+
+    if args.year is not None:
+        stats_query = stats_query.gte('game_date', f'{args.year}-01-01').lt('game_date', f'{args.year + 1}-01-01')
+
+    stats_result = stats_query.execute()
     
     if stats_result.data:
         scores = [r['sword_score'] for r in stats_result.data]
@@ -159,12 +197,16 @@ def main():
         print(f"   Min score: {min(scores):.1f}")
         
         # Top swords
-        top_result = supabase.table('mlb_pitches_enhanced')\
+        top_query = supabase.table('mlb_pitches_enhanced')\
             .select('player_name, sword_score, bat_speed, game_date')\
             .not_.is_('sword_score', 'null')\
             .order('sword_score', desc=True)\
-            .limit(5)\
-            .execute()
+            .limit(5)
+
+        if args.year is not None:
+            top_query = top_query.gte('game_date', f'{args.year}-01-01').lt('game_date', f'{args.year + 1}-01-01')
+
+        top_result = top_query.execute()
         
         if top_result.data:
             print(f"\n🏆 Top 5 Sword Swings:")

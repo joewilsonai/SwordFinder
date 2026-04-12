@@ -1,42 +1,57 @@
 #!/usr/bin/env python3
 """
-Process sword videos for REGULAR SEASON only (excluding spring training)
+Process sword videos for regular-season games only (excluding spring training).
+Defaults are season-aware and safe for annual reuse.
 """
 
-import os
-import pandas as pd
-from datetime import datetime, timedelta
-from supabase import create_client
-from dotenv import load_dotenv
-from get_play_ids_on_demand import get_play_ids_for_pitches
-from clean_video_processor import EnhancedSwordVideoProcessor
+import argparse
 import logging
+import os
 import time
+from datetime import datetime, timedelta
+
+import pandas as pd
+from dotenv import load_dotenv
+from supabase import create_client
+
+from clean_video_processor import EnhancedSwordVideoProcessor
+from env_config import get_env
+from get_play_ids_on_demand import get_play_ids_for_pitches
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def get_regular_season_start():
-    """Get the start date of regular season from database"""
+
+KNOWN_OPENING_DAYS = {
+    2025: datetime(2025, 3, 20),
+    2026: datetime(2026, 3, 25),
+}
+
+
+def get_known_opening_day(year):
+    return KNOWN_OPENING_DAYS.get(year, datetime(year, 3, 25))
+
+
+def get_regular_season_start(year):
+    """Get regular-season start date for a specific season from the database."""
     load_dotenv()
-    
-    supabase_url = os.getenv('SUPABASE_URL')
-    supabase_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+
+    supabase_url = get_env('SUPABASE_URL')
+    supabase_key = get_env('SUPABASE_SERVICE_ROLE_KEY')
     supabase = create_client(supabase_url, supabase_key)
-    
-    # Find first regular season game (game_type = 'R')
+
     result = supabase.table('mlb_pitches_enhanced')\
         .select('game_date')\
         .eq('game_type', 'R')\
+        .gte('game_date', f'{year}-01-01')\
+        .lt('game_date', f'{year + 1}-01-01')\
         .order('game_date')\
         .limit(1)\
         .execute()
-    
+
     if result.data:
         return datetime.strptime(result.data[0]['game_date'], '%Y-%m-%d')
-    else:
-        # Default to April 1 if not found
-        return datetime(2025, 4, 1)
+    return get_known_opening_day(year)
 
 def process_videos_for_date(date_str, supabase, video_processor, n_videos=5):
     """Process top N videos for a specific date (REGULAR SEASON ONLY)"""
@@ -113,53 +128,79 @@ def process_videos_for_date(date_str, supabase, video_processor, n_videos=5):
     logger.info(f"Processed {processed} videos for {date_str} (checked {checked} candidates)")
     return processed
 
+
+def parse_args():
+    yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+    parser = argparse.ArgumentParser(description="Process regular-season sword videos.")
+    parser.add_argument('--season-year', type=int, default=datetime.now().year)
+    parser.add_argument('--start-date', type=str, default=None)
+    parser.add_argument('--end-date', type=str, default=yesterday)
+    parser.add_argument('--videos-per-day', type=int, default=5)
+    parser.add_argument('--dry-run', action='store_true', help='Print plan only.')
+    return parser.parse_args()
+
+
 def main():
-    """Process regular season sword videos only"""
+    """Process regular-season sword videos only."""
+    args = parse_args()
     load_dotenv()
-    
-    # Initialize
-    supabase_url = os.getenv('SUPABASE_URL')
-    supabase_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
-    
+
+    supabase_url = get_env('SUPABASE_URL')
+    supabase_key = get_env('SUPABASE_SERVICE_ROLE_KEY')
+
     if not supabase_url or not supabase_key:
         logger.error("Missing Supabase credentials")
         return
-    
+
     supabase = create_client(supabase_url, supabase_key)
     video_processor = EnhancedSwordVideoProcessor()
-    
+
     print("🗡️ SwordFinder Regular Season Video Processor")
     print("=" * 50)
-    
-    # Get regular season start date
-    print("\n📅 Finding regular season start date...")
-    start_date = get_regular_season_start()
-    end_date = datetime(2025, 6, 21)
-    
+
+    print("\n📅 Resolving regular season date range...")
+    if args.start_date:
+        start_date = datetime.strptime(args.start_date, '%Y-%m-%d')
+    else:
+        start_date = get_regular_season_start(args.season_year)
+    end_date = datetime.strptime(args.end_date, '%Y-%m-%d')
+
+    if start_date > end_date:
+        print(f"No work to do: start date {start_date.date()} is after end date {end_date.date()}.")
+        return
+
     print(f"Regular season: {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
-    
+
     total_days = (end_date - start_date).days + 1
+    if args.dry_run:
+        print("🧪 Dry run complete. No videos were processed.")
+        print(f"   - Days in range: {total_days}")
+        print(f"   - Videos/day target: {args.videos_per_day}")
+        return
+
     total_videos = 0
     days_with_videos = 0
-    
-    # Process each day
+
     current_date = start_date
     while current_date <= end_date:
         date_str = current_date.strftime('%Y-%m-%d')
         print(f"\n📅 Processing {date_str}...")
-        
-        videos = process_videos_for_date(date_str, supabase, video_processor)
+
+        videos = process_videos_for_date(
+            date_str,
+            supabase,
+            video_processor,
+            n_videos=args.videos_per_day,
+        )
         total_videos += videos
         if videos > 0:
             days_with_videos += 1
-        
+
         current_date += timedelta(days=1)
-        
-        # Progress update
+
         days_done = (current_date - start_date).days
         print(f"Progress: {days_done}/{total_days} days, {total_videos} videos total")
-    
-    # Summary
+
     print("\n" + "=" * 50)
     print("✅ Regular Season Processing Complete!")
     print(f"   - Days processed: {total_days}")
@@ -173,7 +214,7 @@ def main():
         .select('sword_score')\
         .not_.is_('video_azure_blob_url', 'null')\
         .execute()
-    
+
     if stats.data:
         print(f"\n📊 Database Stats:")
         print(f"   - Videos in Azure: {len(stats.data)}")

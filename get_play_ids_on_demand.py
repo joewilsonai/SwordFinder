@@ -130,12 +130,14 @@ def download_video(play_id, output_file=None):
 
 # Example usage
 if __name__ == "__main__":
+    current_year = datetime.now().year
+    sample_file = f"mlb_{current_year}_full_season_complete.csv"
     print("📚 Example: Get videos for longest home runs")
     print("=" * 60)
     
     # Load your data
     print("\n1️⃣ First, load your data:")
-    print("   df = pd.read_csv('mlb_2025_full_season.csv')")
+    print(f"   df = pd.read_csv('{sample_file}')")
     
     print("\n2️⃣ Query for what you want:")
     print("   longest_hrs = df[df['is_home_run']].nlargest(5, 'hit_distance_sc')")

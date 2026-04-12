@@ -1,0 +1,146 @@
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@400;500;600;700&display=swap');
+
+:root {
+  --bg: #090909;
+  --bg-soft: #131313;
+  --panel: #171717;
+  --ink: #f5f5f5;
+  --muted: #a6a6a6;
+  --accent: #df1d2f;
+  --accent-soft: #ff6b6b;
+  --line: #2e2e2e;
+  --success: #1fbf75;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Barlow Condensed', sans-serif;
+  background:
+    radial-gradient(1200px 600px at 90% -10%, rgba(223, 29, 47, 0.32), transparent 60%),
+    radial-gradient(900px 500px at -10% -20%, rgba(255, 255, 255, 0.08), transparent 55%),
+    var(--bg);
+  color: var(--ink);
+  min-height: 100vh;
+}
+
+.brand-title {
+  font-family: 'Bebas Neue', sans-serif;
+  letter-spacing: 0.08em;
+}
+
+.card {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01));
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  backdrop-filter: blur(6px);
+}
+
+.badge {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 9999px;
+  padding: 0.15rem 0.7rem;
+  font-size: 0.75rem;
+  line-height: 1;
+  letter-spacing: 0.04em;
+}
+
+.hero-glow {
+  position: relative;
+}
+
+.hero-glow::after {
+  content: "";
+  position: absolute;
+  inset: auto -20% -30% -20%;
+  height: 160px;
+  background: radial-gradient(circle at center, rgba(223, 29, 47, 0.35), transparent 70%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+.sword-card {
+  animation: rise 480ms ease both;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.metric-tile {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.video-shell {
+  border: 1px solid #2b2b2b;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #000;
+}
+
+.video-shell video {
+  width: 100%;
+  height: 230px;
+  object-fit: cover;
+  display: block;
+}
+
+.app-link {
+  color: var(--ink);
+  transition: color 180ms ease;
+}
+
+.app-link:hover,
+.app-link.active {
+  color: var(--accent-soft);
+}
+
+button.primary {
+  border: 0;
+  background: linear-gradient(130deg, var(--accent), #b50b1f);
+  color: white;
+}
+
+button.primary:hover {
+  filter: brightness(1.08);
+}
+
+button.secondary {
+  border: 1px solid var(--line);
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+button.secondary:hover {
+  border-color: #575757;
+}
+
+.loading-dots::after {
+  content: '...';
+  animation: dots 1.2s steps(4, end) infinite;
+}
+
+@keyframes dots {
+  0% { content: ''; }
+  25% { content: '.'; }
+  50% { content: '..'; }
+  75% { content: '...'; }
+  100% { content: ''; }
+}
+
+@media (max-width: 640px) {
+  .video-shell video {
+    height: 200px;
+  }
+}

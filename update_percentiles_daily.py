@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 import logging
 import json
 from scipy import stats
+from env_config import get_env
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -347,8 +348,8 @@ def main():
     """Run daily percentile update"""
     load_dotenv()
     
-    supabase_url = os.getenv('SUPABASE_URL')
-    supabase_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+    supabase_url = get_env('SUPABASE_URL')
+    supabase_key = get_env('SUPABASE_SERVICE_ROLE_KEY')
     
     if not supabase_url or not supabase_key:
         logger.error("Missing Supabase credentials")

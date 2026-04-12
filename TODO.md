@@ -1,211 +1,235 @@
-# �� SwordFinder TODO - June 22, 2024 Update
+# ⚔️ SwordFinder TODO - January 2025
 
-## 🔥 CURRENT STATUS (Updated June 22, 2024, 4:00 PM)
+## 🚀 CURRENT STATUS (Updated January 2025)
 
-### ⏳ In Progress (Running in Background)
-- **Perceived Velocity Calculation**: 20,673 / 353,506 (5.8%) - ETA: ~10-12 hours
-- **Strike Zone Boundaries**: 477 / 353,506 (0.1%) - Just started
-- **Strike Zone Distance**: Waiting for boundaries to complete
-
-### ✅ Completed
-- [x] Database schema with all enhanced columns
+### ✅ Completed & Automated
+- [x] Database schema with all 118+ MLB fields
 - [x] 353,506 MLB pitches uploaded to Supabase
-- [x] Sword scores calculated for 338,170 pitches
-- [x] 426 videos processed and uploaded to Azure
-- [x] API structure created with health and recent swords endpoints
-- [x] Daily update script with all calculations integrated
-- [x] Play ID mapping fixed for accurate video retrieval
+- [x] Sword scores calculated for all eligible pitches
+- [x] Perceived velocity calculations complete
+- [x] Strike zone boundaries and distances calculated
+- [x] All percentiles calculated and indexed
+- [x] Daily update script with duplicate prevention
+- [x] GitHub Actions for automated daily updates
+- [x] Video processing automated (10 videos daily)
+- [x] Spring training filtering (no videos available)
+- [x] Azure blob storage integration working
+- [x] Play ID mapping fixed for accurate videos
 
-## 🚀 IMMEDIATE NEXT STEPS (When calculations complete)
+### 🤖 Running Automatically
+- **Daily MLB Update**: 1 PM UTC via GitHub Actions
+- **Daily Video Processing**: 2 PM UTC via GitHub Actions
+- Both workflows tested and operational
 
-### 1. Complete Data Population
-- [ ] Monitor `perceived_velocity.log` until complete (~10-12 hours)
-- [ ] Monitor `sz_bounds.log` until complete (~2-3 hours)
-- [ ] Run `python calculate_strike_zone_distance.py` once boundaries are set
-- [ ] Run `python calculate_percentiles_sql.py` to populate all percentiles
-- [ ] Verify all calculations completed successfully
+## 🎯 IMMEDIATE PRIORITIES
 
-### 2. Data Validation
-- [ ] Query database to verify no unexpected nulls
-- [ ] Check percentiles are between 0-100
-- [ ] Verify sword scores distribution makes sense
-- [ ] Cross-check video URLs with Azure blob storage
+### 1. Build the Web Application
 
-### 3. Test Daily Updates
-- [ ] Run `python daily_update.py` manually
-- [ ] Verify it handles all new calculations correctly
-- [ ] Check for any duplicate entries
-- [ ] Confirm percentiles update properly
+#### Frontend (Vanilla JavaScript + Tailwind CSS)
+- [ ] Project setup with vanilla JavaScript
+- [ ] Tailwind CSS integration for beautiful, modern styling
+- [ ] Video player component with native HTML5 video controls
+- [ ] Home page with daily sword highlights
+- [ ] Leaderboard page with sortable tables (vanilla JS)
+- [ ] Player profile pages with dynamic content
+- [ ] Pitcher profile pages (sword inducers)
+- [ ] Search functionality with debounced input
+- [ ] Mobile responsive design using Tailwind utilities
+- [ ] Share buttons for individual swords
+- [ ] Progressive enhancement approach
+- [ ] Lazy loading for images and videos
+- [ ] Simple state management without frameworks
 
-## 🏗️ Build the Web App (Ready to Start!)
+#### Why Vanilla JS + Tailwind?
+- No build step required (can use CDN for Tailwind)
+- Faster initial load times
+- Easier to understand and maintain
+- Direct DOM manipulation for dynamic content
+- Modern JavaScript (ES6+) is powerful enough
+- Tailwind provides utility-first CSS for rapid UI development
 
-### 4. Expand API Endpoints
-- [x] ~~`/health` - Basic health check~~ ✅ DONE
-- [x] ~~`/swords/recent` - Recent swords with videos~~ ✅ DONE  
-- [ ] `/swords/top/{date}` - Top swords by specific date
-- [ ] `/swords/search` - Search by player, team, or criteria
-- [ ] `/players/{player_id}/swords` - Player sword history
-- [ ] `/pitchers/{pitcher_id}/victims` - Pitchers who induce swords
-- [ ] `/stats/overview` - Overall statistics and trends
-- [ ] `/stats/percentiles` - Distribution data for UI charts
-- [ ] `/leaderboards/{metric}` - Various leaderboards (bat speed, extension, etc.)
+#### API Expansion
+- [ ] `/swords/date/{date}` - Swords by specific date
+- [ ] `/swords/player/{player_id}` - Player sword history
+- [ ] `/swords/team/{team}` - Team sword stats
+- [ ] `/pitchers/{pitcher_id}/induced` - Pitchers who cause swords
+- [ ] `/stats/trends` - Sword trends over time
+- [ ] `/leaderboards/all-time` - Historical leaderboards
+- [ ] Authentication endpoints
+- [ ] Rate limiting middleware
 
-### 5. Frontend Development
-- [ ] Choose framework (Next.js recommended for SEO and performance)
-- [ ] Video player component with Azure blob integration
-- [ ] Sword leaderboard with filters and sorting
-- [ ] Search functionality with autocomplete
-- [ ] Player/pitcher profile pages
-- [ ] Daily/weekly highlight reels
-- [ ] Mobile-responsive design
-- [ ] Share functionality for individual swords
-
-### 6. Performance & Optimization
-- [ ] Implement Redis caching for expensive queries
-- [ ] Add CDN for video delivery
+### 2. Performance Optimization
+- [ ] Redis caching for expensive queries
+- [ ] CDN setup for video delivery
 - [ ] Database query optimization
-- [ ] API response time monitoring
-- [ ] Implement pagination for large result sets
+- [ ] API response compression
+- [ ] Image optimization for player photos
+- [ ] Lazy loading for video lists
 
-## 📊 Advanced Analytics (Phase 2)
+### 3. Analytics Dashboard
+- [ ] D3.js visualizations for sword distributions
+- [ ] Heat maps showing sword zones
+- [ ] Team comparison charts
+- [ ] Player improvement tracking
+- [ ] Pitch sequence analysis
+- [ ] Export functionality for data
 
-### 7. New Metrics to Calculate
-- [ ] "Sword Rate" by player (swords per 100 swings)
-- [ ] "Sword Inducer Rate" for pitchers
-- [ ] Team-level sword analytics
-- [ ] Situational sword rates (by count, inning, score)
-- [ ] Sword severity index (combining multiple factors)
-- [ ] "Recovery Rate" - players who improve after swords
+## 📊 PHASE 2: Advanced Features
 
-### 8. Visualizations
-- [ ] D3.js charts for sword distributions
-- [ ] Heat maps of sword zones
-- [ ] Player trend lines over time
-- [ ] Interactive pitch sequence viewers
-- [ ] 3D swing path visualizations (using bat tracking data)
+### Enhanced Metrics
+- [ ] Sword Rate per 100 swings
+- [ ] Sword Inducer Rate for pitchers
+- [ ] Clutch Sword Index (leverage situations)
+- [ ] Recovery Rate (performance after swords)
+- [ ] Sword prediction model
+- [ ] Swing plane optimization suggestions
 
-### 9. Machine Learning Opportunities
-- [ ] Predict sword probability pre-pitch
-- [ ] Identify swing patterns leading to swords
-- [ ] Player improvement recommendations
-- [ ] Pitch sequence optimization to avoid swords
+### Social Features
+- [ ] User accounts and favorites
+- [ ] Comment system for videos
+- [ ] Sword brackets/tournaments
+- [ ] Weekly sword awards
+- [ ] Email notifications for favorite players
+- [ ] Discord/Slack integrations
 
-## 🔧 Infrastructure & DevOps
+### Content Generation
+- [ ] Auto-generate social media clips
+- [ ] Weekly highlight reels
+- [ ] Player comparison videos
+- [ ] Educational content about hitting
+- [ ] Automated Twitter/X posts
+- [ ] Instagram story templates
 
-### 10. Deployment Setup
-- [ ] Dockerize the application
-- [ ] Set up CI/CD pipeline
-- [ ] Configure production environment
-- [ ] SSL certificates and domain setup
-- [ ] Monitoring and alerting (Datadog/New Relic)
+## 🔧 INFRASTRUCTURE IMPROVEMENTS
 
-### 11. Data Pipeline Improvements
-- [ ] Optimize video processing pipeline
-- [ ] Implement parallel processing for calculations
-- [ ] Add data quality checks
-- [ ] Backup and disaster recovery plan
+### Monitoring & Reliability
+- [ ] Sentry error tracking
+- [ ] Datadog performance monitoring
+- [ ] Uptime monitoring
+- [ ] Database backup automation
+- [ ] Disaster recovery plan
+- [ ] Load testing
 
-## 📱 Mobile & Social Features
+### Deployment
+- [ ] Docker containers
+- [ ] Kubernetes deployment
+- [ ] CI/CD pipeline improvements
+- [ ] Staging environment
+- [ ] Blue-green deployments
+- [ ] SSL and domain setup
 
-### 12. Mobile App
-- [ ] React Native app development
-- [ ] Push notifications for favorite players
-- [ ] Offline video caching
-- [ ] Social sharing integration
+### Data Pipeline
+- [ ] Parallel video processing
+- [ ] Webhook for real-time updates
+- [ ] Historical data backfill (2024)
+- [ ] Minor league data integration
+- [ ] Statcast 3D data integration
 
-### 13. Social Media Integration
-- [ ] Auto-post daily top swords to Twitter/X
-- [ ] Instagram story generator for sword highlights
-- [ ] Discord/Slack webhooks for team-specific swords
-- [ ] TikTok-style vertical video clips
+## 📱 MOBILE & PLATFORM EXPANSION
 
-## 🎯 Known Issues to Address
+### Mobile App
+- [ ] Progressive Web App (PWA) using vanilla JS
+- [ ] Service workers for offline functionality
+- [ ] Web app manifest for installability
+- [ ] Push notifications via Web Push API
+- [ ] Responsive design that works great on mobile
+- [ ] Native app using WebView wrapper if needed
 
-1. **Data Gaps**
-   - ~40% of swings missing play IDs
-   - ~56% of pitches missing bat tracking data
-   - Spring training games have no video coverage
-
-2. **Performance Issues**
-   - Perceived velocity calculation takes ~10-12 hours for full dataset
-   - Need to optimize batch processing
-   - Video downloads can timeout on slow connections
-
-3. **Data Quality**
-   - Some "swinging strikes" show no swing in bat tracking
-   - Need better filtering for true sword swings
-   - Strike zone boundaries using MLB averages (not player-specific)
-
-## 💡 Future Enhancements
-
-### Premium Features
-- [ ] Custom alerts for specific players/teams
-- [ ] Advanced analytics dashboard
-- [ ] Historical data access (pre-2025)
-- [ ] API access for developers
-- [ ] White-label solution for teams
-
-### Content & Community
-- [ ] User-submitted sword nominations
-- [ ] Sword swing contests/brackets
-- [ ] Player AMAs about their worst swings
-- [ ] Educational content about hitting mechanics
-
-### Partnerships
+### Platform Integrations
 - [ ] MLB official partnership
-- [ ] Team-specific integrations
-- [ ] Broadcasting integration
-- [ ] Fantasy baseball platforms
+- [ ] Fantasy baseball integrations
+- [ ] Broadcast overlays
+- [ ] Team partnerships
+- [ ] Media API access
 
-## 📅 Realistic Timeline
+## 🐛 KNOWN ISSUES & IMPROVEMENTS
 
-### Week 1 (Current)
-- ✅ Complete all data calculations
-- ✅ Basic API structure
-- ⏳ Waiting for calculations to finish
+### Data Quality
+- [x] ~~Some "swinging strikes" show no swing~~ (Filtered in queries)
+- [x] ~~Spring training videos unavailable~~ (Now filtered automatically)
+- [ ] Strike zones use league average (not player-specific)
 
-### Week 2
-- Expand API endpoints
-- Basic frontend with video player
-- Deploy to staging environment
+### Performance
+- [x] ~~Perceived velocity calculation slow~~ (Completed)
+- [x] ~~Duplicate entries in daily updates~~ (Fixed with smart filtering)
+- [ ] Video processing could be parallelized
+- [ ] Large CSV files in repo (consider Git LFS)
 
-### Week 3
-- Advanced features and analytics
-- Performance optimization
-- Mobile responsive design
+### Features
+- [ ] Multi-angle video views
+- [ ] Slow motion analysis
+- [ ] Swing comparison tools
+- [ ] Coaching feedback system
 
-### Week 4
-- Polish and bug fixes
-- Production deployment
-- Marketing and launch
+## 📅 REALISTIC TIMELINE
 
-### Ongoing
-- Daily data updates
-- Feature additions based on feedback
-- Performance monitoring and optimization
+### Week 1-2 (Current)
+- [ ] Basic frontend with video player
+- [ ] Essential API endpoints
+- [ ] Deploy to production
 
-## 🎯 Success Metrics
+### Week 3-4
+- [ ] Complete UI features
+- [ ] Performance optimization
+- [ ] User testing
+
+### Month 2
+- [ ] Advanced analytics
+- [ ] Social features
+- [ ] Mobile app development
+
+### Month 3
+- [ ] Platform integrations
+- [ ] Marketing launch
+- [ ] Partnership discussions
+
+## 🎯 SUCCESS METRICS
 
 ### Technical
-- API response time < 200ms
-- Video load time < 2s
+- API response time < 200ms (p95)
+- Video load time < 2 seconds
 - 99.9% uptime
-- < 5 minute data freshness
+- Zero data loss
+
+### User Engagement
+- 1,000 daily active users
+- 5+ minute average session
+- 20% weekly retention
+- 50+ media mentions
 
 ### Business
-- 1,000 DAU within first month
-- 10,000 videos viewed/week
-- 50+ media mentions
 - 5 team partnerships
+- 10,000 video views/week
+- Positive ROI within 6 months
+- MLB official recognition
 
-### Engagement
-- Average session > 5 minutes
-- 3+ videos watched per session
-- 20% weekly return rate
-- 1000+ social shares/week
+## 💡 FUTURE IDEAS
+
+### Premium Features
+- [ ] Custom alerts for specific criteria
+- [ ] Advanced analytics API
+- [ ] White-label for teams
+- [ ] Coaching consultation booking
+- [ ] NFT sword moments
+
+### Research Projects
+- [ ] ML model for swing improvement
+- [ ] Biomechanics analysis
+- [ ] Injury prediction from swing data
+- [ ] Optimal swing path calculator
+- [ ] VR training integration
+
+### Community
+- [ ] Sword swing contests
+- [ ] Player AMAs
+- [ ] User-submitted nominations
+- [ ] Coaching clinics
+- [ ] Youth baseball integration
 
 ---
 
-**Last Updated**: June 22, 2024, 4:00 PM PST
-**Status**: Data calculations in progress, ready for frontend development
-**Next Review**: Once calculations complete (~10-12 hours) 
+**Last Updated**: January 2025  
+**Status**: Core infrastructure complete and automated, ready for UI development  
+**Priority**: Build the web application to showcase the data
+
+Use `ui/assets/config.js` for public runtime UI configuration.

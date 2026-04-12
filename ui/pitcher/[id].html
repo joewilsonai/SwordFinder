@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SwordFinder | Pitcher Profile</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/assets/styles.css" />
+  </head>
+  <body>
+    <header id="top-nav" class="sticky top-0 z-50 border-b border-zinc-800/80 bg-black/70 backdrop-blur"></header>
+
+    <main class="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 pb-12 pt-6 md:px-6 md:pt-10">
+      <section class="card p-5 md:p-7">
+        <p class="text-xs uppercase tracking-[0.14em] text-zinc-400">Pitcher Profile</p>
+        <h1 id="profile-title" class="brand-title mt-2 text-5xl leading-none md:text-6xl">Loading pitcher</h1>
+        <p id="profile-subtitle" class="mt-3 text-sm text-zinc-300">Calculating induced sword profile.</p>
+
+        <div class="mt-5 grid gap-3 xs:grid-cols-2 md:grid-cols-4">
+          <div class="metric-tile p-3">
+            <p class="text-[11px] uppercase tracking-[0.08em] text-zinc-500">Induced Swords</p>
+            <p id="metric-induced" class="text-2xl">--</p>
+          </div>
+          <div class="metric-tile p-3">
+            <p class="text-[11px] uppercase tracking-[0.08em] text-zinc-500">Average Score</p>
+            <p id="metric-avg" class="text-2xl">--</p>
+          </div>
+          <div class="metric-tile p-3">
+            <p class="text-[11px] uppercase tracking-[0.08em] text-zinc-500">Best Induced Sword</p>
+            <p id="metric-best" class="text-2xl">--</p>
+          </div>
+          <div class="metric-tile p-3">
+            <p class="text-[11px] uppercase tracking-[0.08em] text-zinc-500">Sword Rate</p>
+            <p id="metric-rate" class="text-2xl">--</p>
+          </div>
+        </div>
+
+        <p id="status-text" class="mt-4 text-sm text-zinc-400 loading-dots">Loading profile</p>
+      </section>
+
+      <section>
+        <h2 class="brand-title mb-3 text-3xl">Induced Sword History</h2>
+        <div id="history-list" class="grid gap-4 md:grid-cols-2"></div>
+      </section>
+    </main>
+
+    <footer id="app-footer" class="border-t border-zinc-800/80"></footer>
+
+    <script src="/assets/config.js"></script>
+    <script type="module" src="/assets/pitcher.js"></script>
+  </body>
+</html>

@@ -10,6 +10,7 @@ import numpy as np
 from supabase import create_client
 from dotenv import load_dotenv
 import logging
+from env_config import get_env
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -49,8 +50,8 @@ def add_perceived_velocity_column():
     """Add perceived velocity column to database if it doesn't exist"""
     load_dotenv()
     
-    supabase_url = os.getenv('SUPABASE_URL')
-    supabase_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+    supabase_url = get_env('SUPABASE_URL')
+    supabase_key = get_env('SUPABASE_SERVICE_ROLE_KEY')
     supabase = create_client(supabase_url, supabase_key)
     
     # Add column
@@ -106,8 +107,8 @@ def main():
     """Calculate perceived velocity for all pitches"""
     load_dotenv()
     
-    supabase_url = os.getenv('SUPABASE_URL')
-    supabase_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+    supabase_url = get_env('SUPABASE_URL')
+    supabase_key = get_env('SUPABASE_SERVICE_ROLE_KEY')
     
     if not supabase_url or not supabase_key:
         logger.error("Missing Supabase credentials")

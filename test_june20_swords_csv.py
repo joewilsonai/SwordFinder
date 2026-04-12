@@ -1,22 +1,37 @@
 #!/usr/bin/env python3
 """
-Test script to find top 5 sword swings for June 20, 2025 using CSV data
+Test script to find top 5 sword swings for a given date using CSV data.
 """
 
+import argparse
 import os
 import pandas as pd
 from get_play_ids_on_demand import get_play_ids_for_pitches
 from clean_video_processor import EnhancedSwordVideoProcessor
-from datetime import datetime
+from datetime import datetime, timedelta
 
-def get_top_swords_from_csv(date_str):
+
+def resolve_csv(year, input_file=None):
+    if input_file:
+        return input_file
+    candidate = f"mlb_{year}_full_season_complete.csv"
+    if os.path.exists(candidate):
+        return candidate
+    if year == 2025 and os.path.exists("mlb_2025_full_season_complete.csv"):
+        return "mlb_2025_full_season_complete.csv"
+    raise FileNotFoundError(
+        f"Could not locate {candidate}. Use --input-file to specify a CSV."
+    )
+
+
+def get_top_swords_from_csv(date_str, csv_file):
     """Get top 5 sword swings for a specific date from CSV"""
     
     print(f"🔍 Loading CSV data...")
     
     # Load the CSV file
     try:
-        df = pd.read_csv('mlb_2025_full_season_complete.csv')
+        df = pd.read_csv(csv_file)
         print(f"✅ Loaded {len(df)} total pitches")
     except Exception as e:
         print(f"❌ Error loading CSV: {e}")
@@ -58,22 +73,33 @@ def get_top_swords_from_csv(date_str):
     print(f"✅ Found {len(sword_df)} sword candidates!")
     return sword_df
 
+
+def parse_args():
+    default_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+    parser = argparse.ArgumentParser(description="Find top sword swings from local CSV.")
+    parser.add_argument("--date", type=str, default=default_date)
+    parser.add_argument("--year", type=int, default=datetime.now().year)
+    parser.add_argument("--input-file", type=str, default=None)
+    return parser.parse_args()
+
+
 def main():
-    # Test date
-    test_date = '2025-06-20'
+    args = parse_args()
+    test_date = args.date
+    csv_file = resolve_csv(args.year, args.input_file)
     
     print(f"🎯 SwordFinder Video Test - {test_date}")
     print("=" * 50)
     
     # Get top swords from CSV
-    df = get_top_swords_from_csv(test_date)
+    df = get_top_swords_from_csv(test_date, csv_file)
     
     if df is None or df.empty:
         print("\n❌ No sword swings found. Checking available dates...")
         
         # Load CSV to check dates
         try:
-            full_df = pd.read_csv('mlb_2025_full_season_complete.csv')
+            full_df = pd.read_csv(csv_file)
             full_df['game_date'] = pd.to_datetime(full_df['game_date'])
             
             # Get unique dates sorted
@@ -88,9 +114,15 @@ def main():
             print("\nDate range: {} to {}".format(min(dates), max(dates)))
             
             # Try June 19 or 21 instead
-            for alt_date in ['2025-06-19', '2025-06-21', '2025-06-18']:
+            target_dt = datetime.strptime(test_date, "%Y-%m-%d")
+            alt_dates = [
+                (target_dt - timedelta(days=1)).strftime("%Y-%m-%d"),
+                (target_dt + timedelta(days=1)).strftime("%Y-%m-%d"),
+                (target_dt - timedelta(days=2)).strftime("%Y-%m-%d"),
+            ]
+            for alt_date in alt_dates:
                 print(f"\nTrying {alt_date}...")
-                alt_df = get_top_swords_from_csv(alt_date)
+                alt_df = get_top_swords_from_csv(alt_date, csv_file)
                 if alt_df is not None and not alt_df.empty:
                     df = alt_df
                     test_date = alt_date
