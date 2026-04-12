@@ -7,6 +7,10 @@ on:
     - cron: '0 13 * * *'
   workflow_dispatch:  # Allow manual triggering
 
+concurrency:
+  group: swordfinder-daily-update
+  cancel-in-progress: false
+
 jobs:
   update-data:
     runs-on: ubuntu-latest
@@ -17,7 +21,7 @@ jobs:
       uses: actions/checkout@v4
     
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.11'
     
@@ -36,6 +40,7 @@ jobs:
     
     - name: Run daily update
       env:
+        PYTHONUNBUFFERED: '1'
         SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
         SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
