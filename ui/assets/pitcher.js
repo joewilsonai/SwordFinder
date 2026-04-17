@@ -35,7 +35,7 @@ function renderHistory(rows) {
           <span class="text-lg text-[var(--accent-soft)]">${Number(row.sword_score || 0).toFixed(1)}</span>
         </div>
         <p class="mb-2 text-sm text-zinc-200">
-          induced on <a class="underline decoration-zinc-600 hover:decoration-[var(--accent-soft)]" href="${linkForPlayer(row)}">${escapeHtml(row.player_name || 'Unknown')}</a>
+          induced on <a class="underline decoration-zinc-600 hover:decoration-[var(--accent-soft)]" href="${linkForPlayer(row)}">${escapeHtml(row.batter_name || 'Unknown')}</a>
           • bat speed ${row.bat_speed ? Number(row.bat_speed).toFixed(1) : '--'} mph
         </p>
         <div class="video-shell">
@@ -65,7 +65,7 @@ async function init() {
     const [rows, totalPitches] = await Promise.all([
       fetchRows('mlb_pitches_enhanced', {
         select:
-          'id,pitcher,pitcher_name,batter,player_name,game_date,pitch_type,release_speed,sword_score,bat_speed,video_azure_blob_url',
+          'id,pitcher,pitcher_name,batter,player_name,batter_name,game_date,pitch_type,release_speed,sword_score,bat_speed,video_azure_blob_url',
         pitcher: `eq.${pitcherId}`,
         sword_score: 'gt.0',
         game_date: [`gte.${season.startDate}`, `lt.${season.endDate}`],
@@ -87,7 +87,7 @@ async function init() {
       return;
     }
 
-    const name = rows[0].pitcher_name || `Pitcher #${pitcherId}`;
+    const name = rows[0].pitcher_name || rows[0].player_name || `Pitcher #${pitcherId}`;
     const avg = rows.reduce((sum, r) => sum + Number(r.sword_score || 0), 0) / rows.length;
     const best = rows.reduce((acc, r) => Math.max(acc, Number(r.sword_score || 0)), 0);
     const rate = totalPitches ? (rows.length / totalPitches) * 100 : 0;

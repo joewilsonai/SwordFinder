@@ -34,7 +34,7 @@ function renderHistory(rows) {
           <span class="text-lg text-[var(--accent-soft)]">${Number(row.sword_score || 0).toFixed(1)}</span>
         </div>
         <p class="mb-2 text-sm text-zinc-200">
-          vs <a class="underline decoration-zinc-600 hover:decoration-[var(--accent-soft)]" href="${linkForPitcher(row)}">${escapeHtml(row.pitcher_name || 'Unknown')}</a>
+          vs <a class="underline decoration-zinc-600 hover:decoration-[var(--accent-soft)]" href="${linkForPitcher(row)}">${escapeHtml(row.pitcher_name || row.player_name || 'Unknown')}</a>
           • ${escapeHtml(row.pitch_type || '--')} ${Number(row.release_speed || 0).toFixed(1)} mph
         </p>
         <div class="video-shell">
@@ -64,7 +64,7 @@ async function init() {
     const [rows, totalPitches] = await Promise.all([
       fetchRows('mlb_pitches_enhanced', {
         select:
-          'id,batter,player_name,pitcher,pitcher_name,game_date,home_team,away_team,sword_score,bat_speed,pitch_type,release_speed,video_azure_blob_url',
+          'id,batter,player_name,pitcher,pitcher_name,batter_name,game_date,home_team,away_team,sword_score,bat_speed,pitch_type,release_speed,video_azure_blob_url',
         batter: `eq.${playerId}`,
         sword_score: 'gt.0',
         game_date: [`gte.${season.startDate}`, `lt.${season.endDate}`],
@@ -86,7 +86,7 @@ async function init() {
       return;
     }
 
-    const name = rows[0].player_name || `Hitter #${playerId}`;
+    const name = rows[0].batter_name || `Hitter #${playerId}`;
     const avg = rows.reduce((sum, r) => sum + Number(r.sword_score || 0), 0) / rows.length;
     const worst = rows.reduce((acc, r) => Math.max(acc, Number(r.sword_score || 0)), 0);
     const rate = totalPitches ? (rows.length / totalPitches) * 100 : 0;

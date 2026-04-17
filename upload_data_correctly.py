@@ -122,7 +122,21 @@ def prepare_data(df):
             clean_df[col] = clean_df[col].astype(bool)
     
     # Add computed columns
+    # Statcast convention: player_name = PITCHER's name. Copy to pitcher_name for UI convenience.
     clean_df['pitcher_name'] = clean_df['player_name'] if 'player_name' in clean_df.columns else None
+
+    # batter_name is not in Statcast raw data — resolve from MLB Stats API via cached helper.
+    if 'batter' in clean_df.columns:
+        try:
+            from resolve_player_names import resolve_names
+            unique_batters = [int(x) for x in clean_df['batter'].dropna().unique()]
+            name_map = resolve_names(unique_batters)
+            clean_df['batter_name'] = clean_df['batter'].map(lambda b: name_map.get(int(b)) if pd.notna(b) else None)
+            print(f"  resolved {len(name_map)}/{len(unique_batters)} batter names")
+        except Exception as e:
+            print(f"  batter_name resolution failed: {e} — column left empty")
+            clean_df['batter_name'] = None
+
     clean_df['is_whiff'] = clean_df['description'].isin(['swinging_strike', 'swinging_strike_blocked']) if 'description' in clean_df.columns else False
     clean_df['has_bat_tracking'] = clean_df['bat_speed'].notna() if 'bat_speed' in clean_df.columns else False
     

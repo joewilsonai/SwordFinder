@@ -43,7 +43,7 @@ function renderTopSwordCards(rows) {
       (row) => `
       <article class="card sword-card p-3 md:p-4">
         <div class="mb-2 flex items-center justify-between">
-          <a class="font-semibold hover:text-[var(--accent-soft)]" href="${linkForPlayer(row)}">${escapeHtml(row.player_name || 'Unknown')}</a>
+          <a class="font-semibold hover:text-[var(--accent-soft)]" href="${linkForPlayer(row)}">${escapeHtml(row.batter_name || 'Unknown')}</a>
           <span class="text-lg text-[var(--accent-soft)]">${Number(row.sword_score || 0).toFixed(1)}</span>
         </div>
         <p class="text-xs uppercase tracking-[0.08em] text-zinc-400">${formatDate(row.game_date)} • ${escapeHtml(row.pitch_type || '--')} ${Number(row.release_speed || 0).toFixed(1)} mph</p>
@@ -84,7 +84,7 @@ function aggregateBy(rows, idKey, nameKey) {
 }
 
 function renderHitterTable(rows) {
-  const hitters = aggregateBy(rows, 'batter', 'player_name')
+  const hitters = aggregateBy(rows, 'batter', 'batter_name')
     .sort((a, b) => b.count - a.count || b.avgScore - a.avgScore)
     .slice(0, 12);
 
@@ -145,7 +145,7 @@ async function refresh() {
 
   const start = rangeStart();
   const rows = await fetchRows('mlb_pitches_enhanced', {
-    select: 'id,batter,pitcher,player_name,pitcher_name,sword_score,game_date,pitch_type,release_speed',
+    select: 'id,batter,pitcher,player_name,pitcher_name,batter_name,sword_score,game_date,pitch_type,release_speed',
     sword_score: 'gt.0',
     game_date: [`gte.${start}`, `lte.${latestDate}`],
     order: 'sword_score.desc',

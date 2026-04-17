@@ -106,7 +106,24 @@ def prepare_data_for_upload(df: pd.DataFrame, supabase=None) -> pd.DataFrame:
     # Ensure game_date is datetime
     if 'game_date' in df.columns:
         df['game_date'] = pd.to_datetime(df['game_date'])
-    
+
+    # Populate pitcher_name and batter_name columns.
+    # Statcast convention: player_name = PITCHER's name. There is no batter_name in raw data —
+    # we resolve it from the batter ID via MLB Stats API (cached locally).
+    if 'player_name' in df.columns:
+        df['pitcher_name'] = df['player_name']
+
+    if 'batter' in df.columns:
+        try:
+            from resolve_player_names import resolve_names
+            unique_batters = [int(x) for x in df['batter'].dropna().unique()]
+            name_map = resolve_names(unique_batters)
+            df['batter_name'] = df['batter'].map(lambda b: name_map.get(int(b)) if pd.notna(b) else None)
+            logging.info(f"Resolved {len(name_map)}/{len(unique_batters)} batter names")
+        except Exception as e:
+            logging.warning(f"batter_name resolution failed: {e}")
+            df['batter_name'] = None
+
     return df
 
 def calculate_perceived_velocity_simple(actual_velocity, extension):

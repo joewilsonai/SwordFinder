@@ -28,6 +28,7 @@ async function getLatestSwordDate() {
   const rows = await fetchRows('mlb_pitches_enhanced', {
     select: 'game_date',
     sword_score: 'gt.0',
+    video_azure_blob_url: 'not.is.null',
     game_date: [`gte.${season.startDate}`, `lt.${season.endDate}`],
     order: 'game_date.desc',
     limit: 1,
@@ -48,11 +49,11 @@ function cardTemplate(row, idx) {
         <span class="text-xl font-semibold text-[var(--accent-soft)]">${Number(row.sword_score || 0).toFixed(1)}</span>
       </div>
       <div class="mb-2 flex items-baseline justify-between gap-4">
-        <a class="text-xl font-semibold hover:text-[var(--accent-soft)]" href="${playerLink}">${escapeHtml(row.player_name || 'Unknown hitter')}</a>
+        <a class="text-xl font-semibold hover:text-[var(--accent-soft)]" href="${playerLink}">${escapeHtml(row.batter_name || 'Unknown hitter')}</a>
         <span class="text-xs uppercase tracking-[0.08em] text-zinc-400">${escapeHtml(row.home_team || '')} vs ${escapeHtml(row.away_team || '')}</span>
       </div>
       <p class="mb-3 text-sm text-zinc-300">
-        vs <a class="underline decoration-zinc-500 hover:decoration-[var(--accent-soft)]" href="${pitcherLink}">${escapeHtml(row.pitcher_name || 'Unknown pitcher')}</a>
+        vs <a class="underline decoration-zinc-500 hover:decoration-[var(--accent-soft)]" href="${pitcherLink}">${escapeHtml(row.pitcher_name || row.player_name || 'Unknown pitcher')}</a>
         • ${escapeHtml(row.pitch_type || row.pitch_name || 'Pitch')} ${Number(row.release_speed || 0).toFixed(1)} mph
       </p>
       <div class="video-shell mb-3">
@@ -128,9 +129,10 @@ async function loadTopCards(latestDate) {
 
   const rows = await fetchRows('mlb_pitches_enhanced', {
     select:
-      'id,batter,pitcher,player_name,pitcher_name,home_team,away_team,game_date,sword_score,bat_speed,swing_path_tilt,pitch_type,pitch_name,release_speed,video_azure_blob_url,inning,inning_topbot',
+      'id,batter,pitcher,player_name,pitcher_name,batter_name,home_team,away_team,game_date,sword_score,bat_speed,swing_path_tilt,pitch_type,pitch_name,release_speed,video_azure_blob_url,inning,inning_topbot',
     game_date: `eq.${latestDate}`,
     sword_score: 'gt.0',
+    video_azure_blob_url: 'not.is.null',
     order: 'sword_score.desc',
     limit: 12,
   });
