@@ -18,6 +18,9 @@ flowchart LR
     user --> vercel
     vercel -->|API-first reads| api
     api -->|read rows/counts/swords| db
+    api -->|optional on-load clip hydration| statsapi
+    api -->|optional on-load clip hydration| savant
+    api -->|cache recovered clips| azure
     api -->|returns video_azure_blob_url| vercel
     user -->|plays MP4 clips| azure
 
@@ -86,8 +89,9 @@ sequenceDiagram
     participant Azure as Azure Blob
 
     Browser->>UI: Load page assets
-    UI->>API: GET /data/rows, /data/count, /swords/recent
+    UI->>API: GET /daily-slate, /profiles/.../swords, /data/rows, /data/count
     API->>DB: Read mlb_pitches_enhanced
+    API->>API: Hydrate missing top-five/profile clips when requested
     DB-->>API: Rows with scores and video URLs
     API-->>UI: JSON
     UI-->>Browser: Render leaderboards, player pages, clip links
@@ -103,6 +107,7 @@ sequenceDiagram
 - **The Ops UI is read-only.** It reads Railway health, video backlog status, and season counts; it does not trigger video processing yet.
 - **GitHub Actions owns scheduled writes.** The daily update writes data; the video workflow writes video URLs; the smoke workflow only verifies production.
 - **The first video backlog is virtual.** A sword row with `sword_score > 0` and no `video_azure_blob_url` is treated as a pending video job. This avoids a new table while giving the app a real backlog surface.
+- **On-load hydration is capped.** The homepage hydrates only the selected top five; profile pages hydrate visible missing profile clips up to `PROFILE_VIDEO_HYDRATION_MAX` so a profile view cannot drain a whole season by accident.
 
 ## Video Resolution Details
 

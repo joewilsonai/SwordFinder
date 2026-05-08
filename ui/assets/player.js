@@ -1,8 +1,7 @@
 import {
   bindVideoHover,
   escapeHtml,
-  fetchCount,
-  fetchRows,
+  fetchApiJson,
   formatDate,
   latestSeasonRange,
   linkForPitcher,
@@ -34,7 +33,7 @@ function renderHistory(rows) {
           <span class="text-lg text-[var(--accent-soft)]">${Number(row.sword_score || 0).toFixed(1)}</span>
         </div>
         <p class="mb-2 text-sm text-zinc-200">
-          vs <a class="underline decoration-zinc-600 hover:decoration-[var(--accent-soft)]" href="${linkForPitcher(row)}">${escapeHtml(row.pitcher_name || row.player_name || 'Unknown')}</a>
+          vs <a class="underline decoration-zinc-600 hover:decoration-[var(--accent-soft)]" href="${linkForPitcher(row)}">${escapeHtml(row.pitcher_name || row.source_player_name || 'Unknown')}</a>
           • ${escapeHtml(row.pitch_type || '--')} ${Number(row.release_speed || 0).toFixed(1)} mph
         </p>
         <div class="video-shell">
@@ -42,7 +41,7 @@ function renderHistory(rows) {
             <video data-hover-unmute="true" autoplay muted loop playsinline controls preload="metadata">
               <source src="${row.video_azure_blob_url}" type="video/mp4" />
             </video>
-          ` : `<div class="flex h-[220px] items-center justify-center text-sm text-zinc-500">Video unavailable</div>`}
+          ` : `<div class="flex h-[220px] items-center justify-center text-sm text-zinc-500">Video pending</div>`}
         </div>
       </article>
     `
@@ -61,22 +60,14 @@ async function init() {
   try {
     setStatusText(`Loading hitter profile ${playerId}`);
 
-    const [rows, totalPitches] = await Promise.all([
-      fetchRows('mlb_pitches_enhanced', {
-        select:
-          'id,batter,player_name,pitcher,pitcher_name,batter_name,game_date,home_team,away_team,sword_score,bat_speed,pitch_type,release_speed,video_azure_blob_url',
-        batter: `eq.${playerId}`,
-        sword_score: 'gt.0',
-        game_date: [`gte.${season.startDate}`, `lt.${season.endDate}`],
-        order: 'sword_score.desc',
-        limit: 120,
-      }),
-      fetchCount('mlb_pitches_enhanced', {
-        select: 'id',
-        batter: `eq.${playerId}`,
-        game_date: [`gte.${season.startDate}`, `lt.${season.endDate}`],
-      }),
-    ]);
+    const profile = await fetchApiJson(`/profiles/batter/${playerId}/swords`, {
+      start_date: season.startDate,
+      end_date: season.endDate,
+      limit: 80,
+      ensure_videos: 'true',
+    });
+    const rows = profile.rows || [];
+    const totalPitches = Number(profile.total_pitches || 0);
 
     if (!rows.length) {
       title.textContent = `Hitter #${playerId}`;
@@ -90,6 +81,8 @@ async function init() {
     const avg = rows.reduce((sum, r) => sum + Number(r.sword_score || 0), 0) / rows.length;
     const worst = rows.reduce((acc, r) => Math.max(acc, Number(r.sword_score || 0)), 0);
     const rate = totalPitches ? (rows.length / totalPitches) * 100 : 0;
+    const hydrated = Number(profile.hydrated || 0);
+    const pending = Number(profile.pending_videos || 0);
 
     title.textContent = name;
     subtitle.textContent = `${season.year} sword history (${rows.length} events tracked)`;
@@ -99,7 +92,15 @@ async function init() {
     metricRate.textContent = `${rate.toFixed(2)}%`;
 
     renderHistory(rows);
-    setStatusText(`Loaded profile for ${name}.`);
+    if (profile.hydration_error) {
+      setStatusText(`Loaded profile for ${name}. Video fetch warning: ${profile.hydration_error}`);
+    } else if (hydrated > 0) {
+      setStatusText(`Loaded profile for ${name}. Cached ${hydrated} missing clip${hydrated === 1 ? '' : 's'}.`);
+    } else if (pending > 0) {
+      setStatusText(`Loaded profile for ${name}. ${pending} clip${pending === 1 ? '' : 's'} still pending.`);
+    } else {
+      setStatusText(`Loaded profile for ${name}.`);
+    }
   } catch (error) {
     console.error(error);
     setStatusText(`Failed to load player profile: ${error.message}`);

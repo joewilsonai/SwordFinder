@@ -63,6 +63,8 @@ VIDEO_BACKLOG_SELECT = (
     "strike_zone_distance_inches,video_azure_blob_url,video_processed_at"
 )
 DAILY_SLATE_MAX_LIMIT = 5
+PROFILE_SWORD_MAX_LIMIT = 80
+PROFILE_VIDEO_HYDRATION_MAX = 12
 DATE_ONLY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 DEFAULT_UI_BASE_URL = "https://swordfinder.com"
 DEFAULT_XAI_MODEL = "grok-4.3"
@@ -129,6 +131,28 @@ def clamp_daily_slate_limit(limit: int) -> int:
     return max(1, min(parsed, DAILY_SLATE_MAX_LIMIT))
 
 
+def clamp_profile_limit(limit: int) -> int:
+    try:
+        parsed = int(limit)
+    except (TypeError, ValueError):
+        parsed = PROFILE_SWORD_MAX_LIMIT
+    return max(1, min(parsed, PROFILE_SWORD_MAX_LIMIT))
+
+
+def clamp_profile_hydration_limit(limit: int) -> int:
+    try:
+        parsed = int(limit)
+    except (TypeError, ValueError):
+        parsed = PROFILE_VIDEO_HYDRATION_MAX
+    return max(0, min(parsed, PROFILE_SWORD_MAX_LIMIT))
+
+
+def profile_video_hydration_limit() -> int:
+    return clamp_profile_hydration_limit(
+        os.getenv("PROFILE_VIDEO_HYDRATION_MAX", PROFILE_VIDEO_HYDRATION_MAX)
+    )
+
+
 def validate_slate_date(date: str) -> str:
     if not date or not DATE_ONLY_RE.match(str(date)):
         raise HTTPException(status_code=400, detail="Date must be YYYY-MM-DD")
@@ -141,8 +165,68 @@ def validate_slate_date(date: str) -> str:
     return date
 
 
+def validate_profile_date_range(start_date: str, end_date: str) -> tuple:
+    validated_start = validate_slate_date(start_date)
+    validated_end = validate_slate_date(end_date)
+
+    start_dt = datetime.strptime(validated_start, "%Y-%m-%d")
+    end_dt = datetime.strptime(validated_end, "%Y-%m-%d")
+    if end_dt <= start_dt:
+        raise HTTPException(status_code=400, detail="end_date must be after start_date")
+
+    return validated_start, validated_end
+
+
+def validate_entity_id(entity_id: int) -> int:
+    try:
+        parsed = int(entity_id)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Profile id must be a positive integer")
+
+    if parsed <= 0:
+        raise HTTPException(status_code=400, detail="Profile id must be a positive integer")
+
+    return parsed
+
+
+def normalize_profile_kind(profile_kind: str) -> str:
+    normalized = str(profile_kind or "").strip().lower()
+    if normalized == "player":
+        return "batter"
+    if normalized in {"pitcher", "batter"}:
+        return normalized
+    raise HTTPException(status_code=400, detail="profile_kind must be pitcher or batter")
+
+
+def profile_filter_column(profile_kind: str) -> str:
+    return normalize_profile_kind(profile_kind)
+
+
 def find_missing_video_rows(rows: list) -> list:
     return [row for row in rows if not row.get("video_azure_blob_url")]
+
+
+def build_profile_swords_response(
+    profile_kind: str,
+    entity_id: int,
+    limit: int,
+    rows: list,
+    total_pitches: int,
+    hydrated: int = 0,
+) -> dict:
+    normalized_rows = normalize_sword_rows(rows)
+
+    return {
+        "profile_kind": normalize_profile_kind(profile_kind),
+        "entity_id": entity_id,
+        "limit": limit,
+        "count": len(normalized_rows),
+        "total_pitches": total_pitches,
+        "hydrated": hydrated,
+        "pending_videos": len(find_missing_video_rows(normalized_rows)),
+        "rows": normalized_rows,
+        "last_checked": utc_now_iso(),
+    }
 
 
 def build_daily_slate_response(
@@ -418,6 +502,45 @@ def fetch_daily_slate_rows(date: str, limit: int) -> list:
     return result.data or []
 
 
+def fetch_profile_sword_rows(
+    profile_kind: str,
+    entity_id: int,
+    start_date: str,
+    end_date: str,
+    limit: int,
+) -> list:
+    filter_column = profile_filter_column(profile_kind)
+    result = supabase.table('mlb_pitches_enhanced')\
+        .select('*')\
+        .eq(filter_column, entity_id)\
+        .gte('game_date', start_date)\
+        .lt('game_date', end_date)\
+        .gt('sword_score', 0)\
+        .order('sword_score', desc=True)\
+        .limit(limit)\
+        .execute()
+
+    return result.data or []
+
+
+def fetch_profile_total_pitches(
+    profile_kind: str,
+    entity_id: int,
+    start_date: str,
+    end_date: str,
+) -> int:
+    filter_column = profile_filter_column(profile_kind)
+    result = supabase.table('mlb_pitches_enhanced')\
+        .select('id', count='exact')\
+        .eq(filter_column, entity_id)\
+        .gte('game_date', start_date)\
+        .lt('game_date', end_date)\
+        .limit(1)\
+        .execute()
+
+    return result.count or 0
+
+
 async def hydrate_missing_daily_slate_videos(rows: list, date: str) -> int:
     missing_rows = find_missing_video_rows(rows)
     if not missing_rows:
@@ -431,6 +554,35 @@ async def hydrate_missing_daily_slate_videos(rows: list, date: str) -> int:
         pd.DataFrame(missing_rows),
         date,
     )
+
+
+async def hydrate_missing_profile_videos(rows: list) -> int:
+    missing_rows = find_missing_video_rows(rows)
+    hydration_limit = profile_video_hydration_limit()
+    if not missing_rows or hydration_limit == 0:
+        return 0
+
+    target_rows = missing_rows[:hydration_limit]
+
+    import pandas as pd
+    from process_daily_sword_videos import process_videos_for_swords
+
+    processed = 0
+    rows_by_date = {}
+    for row in target_rows:
+        game_date = row.get("game_date")
+        if not game_date:
+            continue
+        rows_by_date.setdefault(game_date, []).append(row)
+
+    for game_date, dated_rows in rows_by_date.items():
+        processed += await run_in_threadpool(
+            process_videos_for_swords,
+            pd.DataFrame(dated_rows),
+            game_date,
+        )
+
+    return processed
 
 
 @app.get("/data/rows")
@@ -516,6 +668,70 @@ async def get_daily_slate(date: str, limit: int = 5, ensure_videos: bool = True)
             date=validated_date,
             limit=capped_limit,
             rows=rows,
+            hydrated=hydrated,
+        )
+        if hydration_error:
+            response["hydration_error"] = hydration_error
+        return response
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/profiles/{profile_kind}/{entity_id}/swords")
+async def get_profile_swords(
+    profile_kind: str,
+    entity_id: int,
+    start_date: str,
+    end_date: str,
+    limit: int = PROFILE_SWORD_MAX_LIMIT,
+    ensure_videos: bool = True,
+):
+    """Return a hitter or pitcher sword profile, optionally caching visible missing clips first."""
+    normalized_kind = normalize_profile_kind(profile_kind)
+    validated_entity_id = validate_entity_id(entity_id)
+    validated_start, validated_end = validate_profile_date_range(start_date, end_date)
+    capped_limit = clamp_profile_limit(limit)
+    hydrated = 0
+    hydration_error = None
+
+    try:
+        rows = fetch_profile_sword_rows(
+            profile_kind=normalized_kind,
+            entity_id=validated_entity_id,
+            start_date=validated_start,
+            end_date=validated_end,
+            limit=capped_limit,
+        )
+        total_pitches = fetch_profile_total_pitches(
+            profile_kind=normalized_kind,
+            entity_id=validated_entity_id,
+            start_date=validated_start,
+            end_date=validated_end,
+        )
+
+        if ensure_videos:
+            try:
+                hydrated = await hydrate_missing_profile_videos(rows)
+            except Exception as exc:
+                hydration_error = str(exc)
+
+            if hydrated > 0:
+                rows = fetch_profile_sword_rows(
+                    profile_kind=normalized_kind,
+                    entity_id=validated_entity_id,
+                    start_date=validated_start,
+                    end_date=validated_end,
+                    limit=capped_limit,
+                )
+
+        response = build_profile_swords_response(
+            profile_kind=normalized_kind,
+            entity_id=validated_entity_id,
+            limit=capped_limit,
+            rows=rows,
+            total_pitches=total_pitches,
             hydrated=hydrated,
         )
         if hydration_error:
