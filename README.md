@@ -96,6 +96,14 @@ python process_daily_sword_videos.py --date 2026-05-03 --top-n 25
 python process_daily_sword_videos.py --date 2026-05-03 --all
 ```
 
+Daily homepage slate backfill:
+
+```bash
+source ~/.luna/secrets/keys.env
+python backfill_daily_slate_videos.py --start-date 2026-03-25 --end-date 2026-05-07 --limit 5 --dry-run
+python backfill_daily_slate_videos.py --start-date 2026-03-25 --end-date 2026-05-07 --limit 5
+```
+
 ## Key Files
 
 - `ARCHITECTURE.md`: production topology, nightly data flow, video cache path, and local review/backfill boundaries.
