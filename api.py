@@ -509,6 +509,11 @@ def x_sharing_enabled() -> bool:
     return x_oauth2_is_configured()
 
 
+def x_media_upload_enabled() -> bool:
+    configured = (get_env("X_MEDIA_UPLOAD_ENABLED") or "").lower()
+    return configured not in {"0", "false", "no", "off"}
+
+
 def x_oauth_callback_url(request: Request) -> str:
     configured = get_env("X_OAUTH_CALLBACK_URL") or get_env("TWITTER_OAUTH_CALLBACK_URL")
     if configured:
@@ -1525,6 +1530,7 @@ async def x_oauth_status(request: Request):
             "user_id": get_env("X_USER_ID") or get_env("TWITTER_USER_ID"),
             "disabled": False,
             "auth_mode": "oauth2_user_token",
+            "media_upload_enabled": x_media_upload_enabled(),
         }
 
     if not x_sharing_enabled():
@@ -1535,6 +1541,7 @@ async def x_oauth_status(request: Request):
             "user_id": None,
             "disabled": True,
             "message": X_SHARING_DISABLED_DETAIL,
+            "media_upload_enabled": False,
         }
 
     session = get_x_session(request)
@@ -1544,6 +1551,7 @@ async def x_oauth_status(request: Request):
         "screen_name": session.get("screen_name") if session else None,
         "user_id": session.get("user_id") if session else None,
         "disabled": False,
+        "media_upload_enabled": x_media_upload_enabled(),
     }
 
 
@@ -1698,9 +1706,13 @@ async def post_top_sword_to_x(request: Request, post: TopSwordPostRequest):
         "video_url": top_row.get("video_azure_blob_url"),
         "hydrated": hydrated,
         "top_sword": top_row,
+        "media_upload_enabled": x_media_upload_enabled(),
     }
     if post.dry_run:
         return preview
+
+    if not x_media_upload_enabled():
+        raise HTTPException(status_code=503, detail="X video posting requires an OAuth2 token with media.write.")
 
     session = get_x_session(request)
     result = await upload_and_post_top_sword_video(text, top_row["video_azure_blob_url"], session)

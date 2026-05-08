@@ -57,6 +57,7 @@ let currentXPageUrl = '';
 let currentXShareText = '';
 let isXConnected = false;
 let xScreenName = '';
+let xMediaUploadEnabled = true;
 let pendingXOAuthToken = '';
 
 function isCompleteDate(value) {
@@ -193,7 +194,8 @@ function setXDraftControls(draft = '', shareText = '') {
   const hasDraft = Boolean(currentXShareText.trim());
   copyXDraftButton.disabled = !hasDraft;
   postXNowButton.disabled = !hasDraft || !isXConnected;
-  postTopSwordVideoButton.disabled = !isXConnected || !currentSlateDate;
+  postTopSwordVideoButton.disabled = !isXConnected || !currentSlateDate || !xMediaUploadEnabled;
+  postTopSwordVideoButton.title = xMediaUploadEnabled ? '' : 'X video posting needs media.write on the configured OAuth2 token.';
   openXDraftButton.href = hasDraft
     ? `https://x.com/intent/post?text=${encodeURIComponent(currentXShareText)}`
     : 'https://x.com/intent/post';
@@ -211,6 +213,7 @@ function resetXDraftPanel() {
   currentXPageUrl = '';
   currentXShareText = '';
   pendingXOAuthToken = '';
+  xMediaUploadEnabled = true;
   xDraftMeta.textContent = 'Ready for selected slate';
   xDraftStatus.textContent = '';
   setXDraftControls('');
@@ -224,7 +227,8 @@ function renderXConnectionStatus() {
     : 'Connect X';
   connectXButton.disabled = isXConnected;
   postXNowButton.disabled = !isXConnected || !currentXShareText;
-  postTopSwordVideoButton.disabled = !isXConnected || !currentSlateDate;
+  postTopSwordVideoButton.disabled = !isXConnected || !currentSlateDate || !xMediaUploadEnabled;
+  postTopSwordVideoButton.title = xMediaUploadEnabled ? '' : 'X video posting needs media.write on the configured OAuth2 token.';
 }
 
 function updateXDraftMeta(meta = {}) {
@@ -263,12 +267,14 @@ async function refreshXConnectionStatus() {
     const status = await fetchApiJson('/share/x/oauth/status');
     isXConnected = Boolean(status.connected);
     xScreenName = status.screen_name || '';
+    xMediaUploadEnabled = status.media_upload_enabled !== false;
     renderXConnectionStatus();
     return status;
   } catch (error) {
     console.warn('Could not check X connection', error);
     isXConnected = false;
     xScreenName = '';
+    xMediaUploadEnabled = false;
     renderXConnectionStatus();
     return null;
   }
@@ -426,7 +432,7 @@ async function draftXPost() {
     updateXDraftMeta({ ...payload, share_text: shareText });
     await refreshXConnectionStatus();
     xDraftStatus.textContent = isXConnected
-      ? `Ready to post${xScreenName ? ` as @${xScreenName}` : ' with the configured X token'}.`
+      ? `Ready to post${xScreenName ? ` as @${xScreenName}` : ' with the configured X token'}.${xMediaUploadEnabled ? '' : ' Video posting needs media.write.'}`
       : 'Connect X to post directly, or use Post on X to open the composer.';
   } catch (error) {
     console.error(error);

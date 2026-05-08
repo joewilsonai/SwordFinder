@@ -55,6 +55,8 @@ def test_homepage_loads_selected_date_top_five_swords():
     assert "release_spin_rate" in source
     assert "perceived_velocity" in source
     assert "xSharingEnabled" in source
+    assert "xMediaUploadEnabled" in source
+    assert "media_upload_enabled" in source
     assert "if (xSharingEnabled)" in source
     assert "/share/x/draft" in source
     assert "/share/x/oauth/status" in source

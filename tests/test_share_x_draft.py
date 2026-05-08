@@ -204,6 +204,24 @@ def test_x_oauth_status_reports_oauth2_token_ready(monkeypatch):
     assert status["disabled"] is False
     assert status["screen_name"] == "joewilsonai"
     assert status["auth_mode"] == "oauth2_user_token"
+    assert status["media_upload_enabled"] is True
+
+
+def test_x_oauth_status_reports_media_upload_disabled(monkeypatch):
+    env = {
+        "X_OAUTH2_ACCESS_TOKEN": "access-token",
+        "X_SCREEN_NAME": "joewilsonai",
+        "X_MEDIA_UPLOAD_ENABLED": "false",
+    }
+    monkeypatch.setattr(api, "get_env", lambda name, default=None: env.get(name, default))
+
+    class Request:
+        cookies = {}
+
+    status = asyncio.run(api.x_oauth_status(Request()))
+
+    assert status["connected"] is True
+    assert status["media_upload_enabled"] is False
 
 
 def test_oauth2_env_prefers_base64_wrapped_values(monkeypatch):
