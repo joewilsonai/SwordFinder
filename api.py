@@ -461,6 +461,35 @@ def x_oauth_is_configured() -> bool:
     return bool(x_consumer_key() and x_consumer_secret())
 
 
+def x_oauth1_access_token() -> Optional[str]:
+    return get_secret_env("X_ACCESS_TOKEN", "TWITTER_ACCESS_TOKEN")
+
+
+def x_oauth1_access_token_secret() -> Optional[str]:
+    return get_secret_env("X_ACCESS_TOKEN_SECRET", "TWITTER_ACCESS_TOKEN_SECRET")
+
+
+def x_oauth1_user_token_is_configured() -> bool:
+    return bool(
+        x_consumer_key()
+        and x_consumer_secret()
+        and x_oauth1_access_token()
+        and x_oauth1_access_token_secret()
+    )
+
+
+def x_oauth1_env_session() -> Optional[dict]:
+    if not x_oauth1_user_token_is_configured():
+        return None
+    return {
+        "oauth_token": x_oauth1_access_token(),
+        "oauth_token_secret": x_oauth1_access_token_secret(),
+        "screen_name": x_screen_name(),
+        "user_id": get_env("X_USER_ID") or get_env("TWITTER_USER_ID"),
+        "created_at": time.time(),
+    }
+
+
 def get_secret_env(name: str, *fallback_names: str) -> Optional[str]:
     """Read an env secret, preferring NAME_B64 when hosts reject raw token-like values."""
     names = (name, *fallback_names)
@@ -534,6 +563,9 @@ def x_media_upload_enabled() -> bool:
     configured = (get_env("X_MEDIA_UPLOAD_ENABLED") or "").lower()
     if configured in {"0", "false", "no", "off"}:
         return False
+
+    if x_oauth1_user_token_is_configured():
+        return True
 
     scopes = x_oauth2_granted_scopes()
     if scopes:
@@ -1119,7 +1151,15 @@ async def create_x_post_oauth2(text: str, access_token: str, media_id: Optional[
 
 async def upload_and_post_top_sword_video(text: str, video_url: str, session: Optional[dict] = None) -> dict:
     video_bytes, media_type = await download_video_bytes(video_url)
-    if x_oauth2_is_configured():
+
+    oauth1_session = x_oauth1_env_session() or session
+    if oauth1_session:
+        media = await upload_x_video_bytes(video_bytes, media_type, oauth1_session)
+        result = await create_x_post(text, oauth1_session, media_id=media["media_id"])
+        auth_mode = "oauth1_user_token" if x_oauth1_env_session() else "oauth1_browser_session"
+        return {**result, "media": media, "auth_mode": auth_mode}
+
+    if x_oauth2_is_configured() and x_oauth2_has_scope("media.write"):
         access_token = await get_x_oauth2_user_token()
         try:
             media = await upload_x_video_bytes_oauth2(video_bytes, media_type, access_token)
@@ -1132,11 +1172,7 @@ async def upload_and_post_top_sword_video(text: str, video_url: str, session: Op
             result = await create_x_post_oauth2(text, access_token, media_id=media["media_id"])
         return {**result, "media": media, "auth_mode": "oauth2_user_token"}
 
-    if not session:
-        raise HTTPException(status_code=401, detail="Connect X before posting")
-    media = await upload_x_video_bytes(video_bytes, media_type, session)
-    result = await create_x_post(text, session, media_id=media["media_id"])
-    return {**result, "media": media}
+    raise HTTPException(status_code=503, detail=X_SHARING_DISABLED_DETAIL)
 
 
 async def post_top_sword_link(text: str, request: Request) -> dict:

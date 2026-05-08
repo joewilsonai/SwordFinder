@@ -276,6 +276,61 @@ def test_media_upload_requires_recorded_media_write_scope(monkeypatch):
     assert api.x_media_upload_enabled() is True
 
 
+def test_media_upload_allows_server_side_oauth1_user_token(monkeypatch):
+    env = {
+        "X_MEDIA_UPLOAD_ENABLED": "true",
+        "X_OAUTH2_ACCESS_TOKEN": "oauth2-token",
+        "X_OAUTH2_SCOPE": "tweet.read tweet.write users.read offline.access",
+        "X_API_KEY": "consumer-key",
+        "X_API_SECRET": "consumer-secret",
+        "X_ACCESS_TOKEN": "oauth1-access",
+        "X_ACCESS_TOKEN_SECRET": "oauth1-secret",
+    }
+    monkeypatch.setattr(api, "get_env", lambda name, default=None: env.get(name, default))
+
+    assert api.x_oauth1_user_token_is_configured() is True
+    assert api.x_media_upload_enabled() is True
+
+
+def test_upload_and_post_top_sword_video_prefers_server_oauth1_for_media(monkeypatch):
+    env_session = {
+        "oauth_token": "oauth1-access",
+        "oauth_token_secret": "oauth1-secret",
+        "screen_name": "joewilsonai",
+        "user_id": "1602704058594328576",
+    }
+    calls = []
+
+    async def fake_download_video_bytes(video_url):
+        calls.append(("download", video_url))
+        return b"video-bytes", "video/mp4"
+
+    async def fake_upload_x_video_bytes(video_bytes, media_type, session):
+        calls.append(("oauth1_upload", video_bytes, media_type, session["oauth_token"]))
+        return {"media_id": "media-123", "media_type": media_type}
+
+    async def fake_create_x_post(text, session, media_id=None):
+        calls.append(("oauth1_post", text, session["oauth_token"], media_id))
+        return {"posted": True, "id": "post-123", "media_id": media_id}
+
+    monkeypatch.setattr(api, "download_video_bytes", fake_download_video_bytes)
+    monkeypatch.setattr(api, "x_oauth1_env_session", lambda: env_session)
+    monkeypatch.setattr(api, "upload_x_video_bytes", fake_upload_x_video_bytes)
+    monkeypatch.setattr(api, "create_x_post", fake_create_x_post)
+    monkeypatch.setattr(api, "upload_x_video_bytes_oauth2", lambda *args, **kwargs: pytest.fail("oauth2 upload should not run"))
+
+    result = asyncio.run(api.upload_and_post_top_sword_video("caption", "https://example.test/sword.mp4"))
+
+    assert result["posted"] is True
+    assert result["media_id"] == "media-123"
+    assert result["auth_mode"] == "oauth1_user_token"
+    assert calls == [
+        ("download", "https://example.test/sword.mp4"),
+        ("oauth1_upload", b"video-bytes", "video/mp4", "oauth1-access"),
+        ("oauth1_post", "caption", "oauth1-access", "media-123"),
+    ]
+
+
 def test_oauth2_refresh_caches_granted_scope(monkeypatch):
     class Response:
         status_code = 200
