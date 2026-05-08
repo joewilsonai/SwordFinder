@@ -677,6 +677,35 @@ def build_x_post_body(text: str, media_id: Optional[str] = None) -> dict:
     return body
 
 
+def x_api_error_status_code(response) -> int:
+    status_code = getattr(response, "status_code", 502)
+    if 400 <= status_code < 500:
+        return status_code
+    return 502
+
+
+def x_api_error_detail(action: str, response) -> str:
+    status_code = getattr(response, "status_code", "unknown")
+    body = re.sub(r"\s+", " ", (getattr(response, "text", "") or "").strip())
+    body_detail = body[:240] if body else "X returned an empty response"
+    detail = f"{action} failed with status {status_code}: {body_detail}"
+
+    if status_code == 403 and "media" in action.lower():
+        detail += (
+            ". X accepted the connected user session but denied media upload access. "
+            "Native video posting requires X media upload access, such as an OAuth 2.0 "
+            "user token with media.write or an app tier that can use the media upload endpoint."
+        )
+    return detail
+
+
+def raise_x_api_error(action: str, response) -> None:
+    raise HTTPException(
+        status_code=x_api_error_status_code(response),
+        detail=x_api_error_detail(action, response),
+    )
+
+
 def x_user_auth_header(
     method: str,
     url: str,
@@ -735,15 +764,13 @@ async def upload_x_video_bytes(video_bytes: bytes, media_type: str, session: dic
                     X_MEDIA_UPLOAD_URL,
                     session,
                     request_params=init_params,
-                )
+                ),
+                "Content-Type": "application/x-www-form-urlencoded",
             },
             data=init_params,
         )
         if init_response.status_code >= 400:
-            raise HTTPException(
-                status_code=502,
-                detail=f"X media INIT failed with status {init_response.status_code}: {init_response.text[:240]}",
-            )
+            raise_x_api_error("X media INIT", init_response)
 
         init_payload = init_response.json()
         media_id = init_payload.get("media_id_string") or str(init_payload.get("media_id") or "")
@@ -764,13 +791,7 @@ async def upload_x_video_bytes(video_bytes: bytes, media_type: str, session: dic
                 files={"media": ("swordfinder.mp4", chunk, media_type or "video/mp4")},
             )
             if append_response.status_code >= 400:
-                raise HTTPException(
-                    status_code=502,
-                    detail=(
-                        f"X media APPEND failed with status {append_response.status_code}: "
-                        f"{append_response.text[:240]}"
-                    ),
-                )
+                raise_x_api_error("X media APPEND", append_response)
 
         finalize_params = {"command": "FINALIZE", "media_id": media_id}
         finalize_response = await client.post(
@@ -781,18 +802,13 @@ async def upload_x_video_bytes(video_bytes: bytes, media_type: str, session: dic
                     X_MEDIA_UPLOAD_URL,
                     session,
                     request_params=finalize_params,
-                )
+                ),
+                "Content-Type": "application/x-www-form-urlencoded",
             },
             data=finalize_params,
         )
         if finalize_response.status_code >= 400:
-            raise HTTPException(
-                status_code=502,
-                detail=(
-                    f"X media FINALIZE failed with status {finalize_response.status_code}: "
-                    f"{finalize_response.text[:240]}"
-                ),
-            )
+            raise_x_api_error("X media FINALIZE", finalize_response)
 
         payload = finalize_response.json()
         processing = payload.get("processing_info")
@@ -811,13 +827,7 @@ async def upload_x_video_bytes(video_bytes: bytes, media_type: str, session: dic
                 headers={"Authorization": x_user_auth_header("GET", status_url, session)},
             )
             if status_response.status_code >= 400:
-                raise HTTPException(
-                    status_code=502,
-                    detail=(
-                        f"X media STATUS failed with status {status_response.status_code}: "
-                        f"{status_response.text[:240]}"
-                    ),
-                )
+                raise_x_api_error("X media STATUS", status_response)
             payload = status_response.json()
             processing = payload.get("processing_info")
 
@@ -839,10 +849,7 @@ async def create_x_post(text: str, session: dict, media_id: Optional[str] = None
         )
 
     if response.status_code >= 400:
-        raise HTTPException(
-            status_code=502,
-            detail=f"X post failed with status {response.status_code}: {response.text[:240]}",
-        )
+        raise_x_api_error("X post", response)
     payload = response.json()
     post_id = payload.get("data", {}).get("id")
     if not post_id:

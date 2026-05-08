@@ -8,6 +8,8 @@ from api import (
     build_x_post_body,
     build_x_post_page_url,
     build_x_post_prompt,
+    x_api_error_detail,
+    x_api_error_status_code,
     build_xai_chat_payload,
     create_x_session,
     extract_xai_draft,
@@ -145,6 +147,30 @@ def test_build_x_post_body_attaches_media_id_when_present():
         "text": "hello",
         "media": {"media_ids": ["12345"]},
     }
+
+
+def test_x_api_error_detail_explains_empty_media_forbidden_response():
+    class Response:
+        status_code = 403
+        text = ""
+
+    detail = x_api_error_detail("X media INIT", Response())
+
+    assert "X media INIT failed with status 403" in detail
+    assert "empty response" in detail
+    assert "media upload access" in detail
+    assert "media.write" in detail
+
+
+def test_x_api_error_status_code_preserves_client_auth_errors():
+    class ForbiddenResponse:
+        status_code = 403
+
+    class ServerResponse:
+        status_code = 503
+
+    assert x_api_error_status_code(ForbiddenResponse()) == 403
+    assert x_api_error_status_code(ServerResponse()) == 502
 
 
 def test_parse_oauth_form_response_reads_token_fields():
