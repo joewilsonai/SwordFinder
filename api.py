@@ -3,14 +3,21 @@
 SwordFinder API - FastAPI backend for sword swing videos
 """
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime, timezone
+import base64
+import hashlib
+import hmac
 import httpx
 import os
 import re
+import secrets
+import time
+from urllib.parse import parse_qsl, quote, urlencode, urlparse
 from supabase import create_client
 from dotenv import load_dotenv
 from env_config import get_env
@@ -71,6 +78,15 @@ DEFAULT_UI_BASE_URL = "https://swordfinder.com"
 DEFAULT_XAI_MODEL = "grok-4.3"
 XAI_CHAT_COMPLETIONS_URL = "https://api.x.ai/v1/chat/completions"
 X_POST_CHAR_LIMIT = 280
+X_OAUTH_REQUEST_TOKEN_URL = "https://api.x.com/oauth/request_token"
+X_OAUTH_AUTHORIZE_URL = "https://api.x.com/oauth/authorize"
+X_OAUTH_ACCESS_TOKEN_URL = "https://api.x.com/oauth/access_token"
+X_CREATE_POST_URL = "https://api.x.com/2/tweets"
+X_OAUTH_COOKIE_NAME = "sf_x_session"
+X_OAUTH_COOKIE_MAX_AGE = 60 * 60 * 24 * 30
+X_OAUTH_REQUEST_TTL_SECONDS = 10 * 60
+X_OAUTH_REQUESTS = {}
+X_OAUTH_SESSIONS = {}
 
 
 def utc_now_iso() -> str:
@@ -103,6 +119,16 @@ class ShareDraftRequest(BaseModel):
     date: str
     limit: int = DAILY_SLATE_MAX_LIMIT
     tone: Optional[str] = "sharp, funny, and baseball-native"
+
+
+class XPostRequest(BaseModel):
+    text: str
+    date: Optional[str] = None
+
+
+class XOAuthPinRequest(BaseModel):
+    oauth_token: str
+    pin: str
 
 
 def normalize_sword_row(row: dict) -> dict:
@@ -379,6 +405,276 @@ def build_x_share_text(draft: str, page_url: str, limit: int = X_POST_CHAR_LIMIT
         return trim_x_post_text(cleaned_url, limit)
 
     return f"{trim_x_post_text(cleaned_draft, remaining)}{separator}{cleaned_url}"
+
+
+def x_consumer_key() -> Optional[str]:
+    return get_env("X_API_KEY") or get_env("TWITTER_API_KEY")
+
+
+def x_consumer_secret() -> Optional[str]:
+    return get_env("X_API_SECRET") or get_env("TWITTER_API_SECRET")
+
+
+def x_oauth_is_configured() -> bool:
+    return bool(x_consumer_key() and x_consumer_secret())
+
+
+def x_oauth_callback_url(request: Request) -> str:
+    configured = get_env("X_OAUTH_CALLBACK_URL") or get_env("TWITTER_OAUTH_CALLBACK_URL")
+    if configured:
+        return configured
+    return str(request.url_for("x_oauth_callback"))
+
+
+def x_safe_return_to(value: Optional[str]) -> str:
+    default = (get_env("PUBLIC_UI_BASE_URL") or get_env("UI_BASE_URL") or DEFAULT_UI_BASE_URL).rstrip("/")
+    if not value:
+        return default
+
+    parsed = urlparse(value)
+    allowed_hosts = {
+        "swordfinder.com",
+        "www.swordfinder.com",
+        "ui-one-henna.vercel.app",
+        "localhost",
+        "127.0.0.1",
+    }
+    if parsed.scheme in {"http", "https"} and parsed.hostname in allowed_hosts:
+        return value
+    return default
+
+
+def oauth_percent_encode(value) -> str:
+    return quote(str(value), safe="~")
+
+
+def parse_oauth_form_response(body: str) -> dict:
+    return dict(parse_qsl(body, keep_blank_values=True))
+
+
+def x_oauth_authorize_url(oauth_token: str) -> str:
+    return f"{X_OAUTH_AUTHORIZE_URL}?{urlencode({'oauth_token': oauth_token})}"
+
+
+def prune_x_oauth_requests(now: Optional[float] = None) -> None:
+    cutoff = (now or time.time()) - X_OAUTH_REQUEST_TTL_SECONDS
+    expired = [
+        token
+        for token, state in X_OAUTH_REQUESTS.items()
+        if state.get("created_at", 0) < cutoff
+    ]
+    for token in expired:
+        X_OAUTH_REQUESTS.pop(token, None)
+
+
+def store_x_oauth_request(token_payload: dict, return_to: Optional[str] = None) -> str:
+    prune_x_oauth_requests()
+    oauth_token = token_payload["oauth_token"]
+    X_OAUTH_REQUESTS[oauth_token] = {
+        "oauth_token_secret": token_payload["oauth_token_secret"],
+        "return_to": return_to,
+        "created_at": time.time(),
+    }
+    return oauth_token
+
+
+def create_x_session(access_payload: dict) -> tuple:
+    session_id = secrets.token_urlsafe(32)
+    session = {
+        "oauth_token": access_payload["oauth_token"],
+        "oauth_token_secret": access_payload["oauth_token_secret"],
+        "screen_name": access_payload.get("screen_name"),
+        "user_id": access_payload.get("user_id"),
+        "created_at": time.time(),
+    }
+    X_OAUTH_SESSIONS[session_id] = session
+    return session_id, session
+
+
+def set_x_session_cookie(response: Response, session_id: str) -> None:
+    response.set_cookie(
+        X_OAUTH_COOKIE_NAME,
+        session_id,
+        httponly=True,
+        secure=True,
+        samesite="none",
+        max_age=X_OAUTH_COOKIE_MAX_AGE,
+    )
+
+
+def build_oauth1_authorization_header(
+    method: str,
+    url: str,
+    consumer_key: str,
+    consumer_secret: str,
+    token: Optional[str] = None,
+    token_secret: str = "",
+    extra_oauth_params: Optional[dict] = None,
+    request_params: Optional[dict] = None,
+) -> str:
+    oauth_params = {
+        "oauth_consumer_key": consumer_key,
+        "oauth_nonce": secrets.token_urlsafe(24),
+        "oauth_signature_method": "HMAC-SHA1",
+        "oauth_timestamp": str(int(time.time())),
+        "oauth_version": "1.0",
+    }
+    if token:
+        oauth_params["oauth_token"] = token
+    if extra_oauth_params:
+        oauth_params.update({key: value for key, value in extra_oauth_params.items() if value is not None})
+
+    parsed = urlparse(url)
+    base_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+    signature_params = {}
+    signature_params.update(dict(parse_qsl(parsed.query, keep_blank_values=True)))
+    if request_params:
+        signature_params.update(request_params)
+    signature_params.update(oauth_params)
+
+    parameter_string = "&".join(
+        f"{oauth_percent_encode(key)}={oauth_percent_encode(value)}"
+        for key, value in sorted(signature_params.items())
+    )
+    signature_base = "&".join(
+        [
+            method.upper(),
+            oauth_percent_encode(base_url),
+            oauth_percent_encode(parameter_string),
+        ]
+    )
+    signing_key = f"{oauth_percent_encode(consumer_secret)}&{oauth_percent_encode(token_secret)}"
+    digest = hmac.new(signing_key.encode(), signature_base.encode(), hashlib.sha1).digest()
+    oauth_params["oauth_signature"] = base64.b64encode(digest).decode()
+
+    return "OAuth " + ", ".join(
+        f'{oauth_percent_encode(key)}="{oauth_percent_encode(value)}"'
+        for key, value in sorted(oauth_params.items())
+    )
+
+
+async def request_x_oauth_token(callback_url: str) -> dict:
+    consumer_key = x_consumer_key()
+    consumer_secret = x_consumer_secret()
+    if not consumer_key or not consumer_secret:
+        raise HTTPException(status_code=503, detail="X OAuth API key/secret are not configured")
+
+    extra = {"oauth_callback": callback_url}
+    auth_header = build_oauth1_authorization_header(
+        "POST",
+        X_OAUTH_REQUEST_TOKEN_URL,
+        consumer_key,
+        consumer_secret,
+        extra_oauth_params=extra,
+    )
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.post(X_OAUTH_REQUEST_TOKEN_URL, headers={"Authorization": auth_header})
+
+    if response.status_code >= 400:
+        raise HTTPException(
+            status_code=502,
+            detail=f"X request-token failed with status {response.status_code}: {response.text[:200]}",
+        )
+
+    payload = parse_oauth_form_response(response.text)
+    if payload.get("oauth_callback_confirmed") != "true":
+        raise HTTPException(status_code=502, detail="X did not confirm the OAuth callback")
+    if not payload.get("oauth_token") or not payload.get("oauth_token_secret"):
+        raise HTTPException(status_code=502, detail="X request-token response was missing token fields")
+    return payload
+
+
+async def exchange_x_access_token(oauth_token: str, oauth_verifier: str, request_token_secret: str) -> dict:
+    consumer_key = x_consumer_key()
+    consumer_secret = x_consumer_secret()
+    if not consumer_key or not consumer_secret:
+        raise HTTPException(status_code=503, detail="X OAuth API key/secret are not configured")
+
+    request_params = {"oauth_verifier": oauth_verifier}
+    auth_header = build_oauth1_authorization_header(
+        "POST",
+        X_OAUTH_ACCESS_TOKEN_URL,
+        consumer_key,
+        consumer_secret,
+        token=oauth_token,
+        token_secret=request_token_secret,
+        request_params=request_params,
+    )
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.post(
+            X_OAUTH_ACCESS_TOKEN_URL,
+            headers={
+                "Authorization": auth_header,
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            data=request_params,
+        )
+
+    if response.status_code >= 400:
+        raise HTTPException(
+            status_code=502,
+            detail=f"X access-token failed with status {response.status_code}: {response.text[:200]}",
+        )
+
+    payload = parse_oauth_form_response(response.text)
+    if not payload.get("oauth_token") or not payload.get("oauth_token_secret"):
+        raise HTTPException(status_code=502, detail="X access-token response was missing token fields")
+    return payload
+
+
+def get_x_session(request: Request) -> Optional[dict]:
+    session_id = request.cookies.get(X_OAUTH_COOKIE_NAME)
+    if not session_id:
+        return None
+    return X_OAUTH_SESSIONS.get(session_id)
+
+
+def validate_x_post_text(text: str) -> str:
+    cleaned = (text or "").strip()
+    if not cleaned:
+        raise HTTPException(status_code=400, detail="Post text is required")
+    if len(cleaned) > X_POST_CHAR_LIMIT:
+        raise HTTPException(status_code=400, detail=f"Post text must be {X_POST_CHAR_LIMIT} characters or fewer")
+    return cleaned
+
+
+async def create_x_post(text: str, session: dict) -> dict:
+    consumer_key = x_consumer_key()
+    consumer_secret = x_consumer_secret()
+    if not consumer_key or not consumer_secret:
+        raise HTTPException(status_code=503, detail="X OAuth API key/secret are not configured")
+
+    body = {"text": validate_x_post_text(text)}
+    auth_header = build_oauth1_authorization_header(
+        "POST",
+        X_CREATE_POST_URL,
+        consumer_key,
+        consumer_secret,
+        token=session["oauth_token"],
+        token_secret=session["oauth_token_secret"],
+    )
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.post(
+            X_CREATE_POST_URL,
+            headers={"Authorization": auth_header, "Content-Type": "application/json"},
+            json=body,
+        )
+
+    if response.status_code >= 400:
+        raise HTTPException(
+            status_code=502,
+            detail=f"X post failed with status {response.status_code}: {response.text[:240]}",
+        )
+    payload = response.json()
+    post_id = payload.get("data", {}).get("id")
+    if not post_id:
+        raise HTTPException(status_code=502, detail="X post response did not include a post id")
+    return {
+        "posted": True,
+        "id": post_id,
+        "text": payload.get("data", {}).get("text", body["text"]),
+        "url": f"https://x.com/{session.get('screen_name') or 'i'}/status/{post_id}",
+    }
 
 
 async def request_xai_post_draft(request: ShareDraftRequest, rows: list) -> dict:
@@ -790,6 +1086,113 @@ async def draft_x_post(request: ShareDraftRequest):
         raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/share/x/oauth/status")
+async def x_oauth_status(request: Request):
+    """Return whether the browser has an active X posting session."""
+    session = get_x_session(request)
+    return {
+        "configured": x_oauth_is_configured(),
+        "connected": bool(session),
+        "screen_name": session.get("screen_name") if session else None,
+        "user_id": session.get("user_id") if session else None,
+    }
+
+
+@app.get("/share/x/oauth/start")
+async def x_oauth_start(request: Request, return_to: Optional[str] = None):
+    """Start X 3-legged OAuth and redirect the user to X authorization."""
+    safe_return_to = x_safe_return_to(return_to)
+    callback_url = x_oauth_callback_url(request)
+
+    token_payload = await request_x_oauth_token(callback_url)
+    oauth_token = store_x_oauth_request(token_payload, return_to=safe_return_to)
+
+    return RedirectResponse(x_oauth_authorize_url(oauth_token), status_code=302)
+
+
+@app.get("/share/x/oauth/start-pin")
+async def x_oauth_start_pin():
+    """Start X PIN-based OAuth for apps without an approved web callback."""
+    token_payload = await request_x_oauth_token("oob")
+    oauth_token = store_x_oauth_request(token_payload)
+    return {
+        "mode": "pin",
+        "authorize_url": x_oauth_authorize_url(oauth_token),
+        "oauth_token": oauth_token,
+        "expires_in": X_OAUTH_REQUEST_TTL_SECONDS,
+    }
+
+
+@app.get("/share/x/oauth/callback", name="x_oauth_callback")
+async def x_oauth_callback(
+    oauth_token: Optional[str] = None,
+    oauth_verifier: Optional[str] = None,
+    denied: Optional[str] = None,
+):
+    """Complete X OAuth, create a browser posting session, then return to the UI."""
+    if denied:
+        return RedirectResponse(f"{DEFAULT_UI_BASE_URL}/?x=denied", status_code=302)
+    if not oauth_token or not oauth_verifier:
+        raise HTTPException(status_code=400, detail="Missing OAuth callback parameters")
+
+    request_state = X_OAUTH_REQUESTS.pop(oauth_token, None)
+    if not request_state:
+        raise HTTPException(status_code=400, detail="OAuth request token was not found or expired")
+
+    access_payload = await exchange_x_access_token(
+        oauth_token=oauth_token,
+        oauth_verifier=oauth_verifier,
+        request_token_secret=request_state["oauth_token_secret"],
+    )
+    session_id, _ = create_x_session(access_payload)
+
+    response = RedirectResponse(request_state["return_to"], status_code=302)
+    set_x_session_cookie(response, session_id)
+    return response
+
+
+@app.post("/share/x/oauth/pin")
+async def x_oauth_pin(pin_request: XOAuthPinRequest, response: Response):
+    """Complete X PIN-based OAuth and create a browser posting session."""
+    oauth_token = (pin_request.oauth_token or "").strip()
+    pin = (pin_request.pin or "").strip()
+    if not oauth_token or not pin:
+        raise HTTPException(status_code=400, detail="OAuth token and PIN are required")
+
+    prune_x_oauth_requests()
+    request_state = X_OAUTH_REQUESTS.pop(oauth_token, None)
+    if not request_state:
+        raise HTTPException(status_code=400, detail="OAuth request token was not found or expired")
+
+    access_payload = await exchange_x_access_token(
+        oauth_token=oauth_token,
+        oauth_verifier=pin,
+        request_token_secret=request_state["oauth_token_secret"],
+    )
+    session_id, session = create_x_session(access_payload)
+    set_x_session_cookie(response, session_id)
+    return {
+        "connected": True,
+        "screen_name": session.get("screen_name"),
+        "user_id": session.get("user_id"),
+    }
+
+
+@app.post("/share/x/post")
+async def post_to_x(request: Request, post: XPostRequest):
+    """Publish an approved SwordFinder post through the connected X user session."""
+    session = get_x_session(request)
+    if not session:
+        raise HTTPException(status_code=401, detail="Connect X before posting")
+
+    result = await create_x_post(post.text, session)
+    return {
+        **result,
+        "date": post.date,
+        "screen_name": session.get("screen_name"),
+    }
 
 
 @app.get("/ops/video-backlog")

@@ -58,6 +58,20 @@
         </div>
       </section>
 
+      <section class="sword-definition">
+        <div>
+          <p class="text-xs uppercase tracking-[0.14em] text-zinc-500">What is a sword?</p>
+          <blockquote class="mt-2 text-2xl leading-tight text-zinc-100 md:text-3xl">
+            "now we throw the slider and you'll sword yourself to the ground."
+          </blockquote>
+        </div>
+        <div class="space-y-2 text-sm text-zinc-400 md:max-w-sm">
+          <p>Trevor Bauer's mic'd-up shorthand for the ugly, fooled swing SwordFinder ranks each day.</p>
+          <p><span class="text-zinc-200">Sword Score</span> grades how nasty the miss was. 90+ makes the board; 100+ is elite.</p>
+          <a class="text-xs uppercase tracking-[0.1em] text-zinc-300 underline decoration-zinc-600 hover:decoration-[var(--accent-soft)]" href="https://www.sportskeeda.com/baseball/news-now-throw-slider-sword-ground-trevor-bauer-trash-talks-opposing-batter-mic-d-lmb-game" target="_blank" rel="noreferrer">Quote source</a>
+        </div>
+      </section>
+
       <section class="space-y-4">
         <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <h2 class="brand-title text-3xl">Top 5 Daily Swords</h2>
@@ -74,11 +88,20 @@
               <p id="x-draft-meta" class="text-sm text-zinc-400">Ready for selected slate</p>
             </div>
             <div class="flex flex-wrap gap-2">
+              <button id="connect-x-account" class="secondary rounded-md px-3 py-2 text-sm uppercase tracking-[0.08em]" type="button">Connect X</button>
+              <button id="post-x-now" class="secondary rounded-md px-3 py-2 text-sm uppercase tracking-[0.08em]" type="button" disabled>Post Now</button>
               <button id="copy-x-draft" class="secondary rounded-md px-3 py-2 text-sm uppercase tracking-[0.08em]" type="button" disabled>Copy Post</button>
               <a id="open-x-draft" class="secondary pointer-events-none rounded-md px-3 py-2 text-sm uppercase tracking-[0.08em] opacity-50" href="https://x.com/intent/post" target="_blank" rel="noreferrer">Post on X</a>
             </div>
           </div>
           <textarea id="x-draft-text" class="x-draft-textarea mt-3" rows="4" maxlength="280" aria-label="Editable X post draft"></textarea>
+          <div id="x-pin-panel" class="x-pin-panel mt-3 hidden">
+            <label for="x-pin-input" class="text-xs uppercase tracking-[0.12em] text-zinc-500">X authorization PIN</label>
+            <div class="mt-2 flex flex-col gap-2 sm:flex-row">
+              <input id="x-pin-input" class="x-pin-input" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="Paste PIN" />
+              <button id="verify-x-pin" class="secondary rounded-md px-3 py-2 text-sm uppercase tracking-[0.08em]" type="button">Verify PIN</button>
+            </div>
+          </div>
           <p id="x-draft-status" class="mt-2 text-sm text-zinc-400"></p>
         </div>
         <div id="sword-cards" class="grid gap-4"></div>

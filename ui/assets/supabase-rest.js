@@ -14,6 +14,10 @@ const BASE_HEADERS = {
   Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
 };
 
+export function getApiBaseUrl() {
+  return API_BASE_URL;
+}
+
 function asList(value) {
   return Array.isArray(value) ? value : [value];
 }
@@ -38,6 +42,7 @@ export async function fetchRows(table, params = {}, options = {}) {
     const response = await fetch(url, {
       method: 'GET',
       signal: options.signal,
+      credentials: options.credentials || 'include',
     });
     if (!response.ok) {
       const text = await response.text();
@@ -71,6 +76,7 @@ export async function fetchCount(table, params = {}, options = {}) {
     const response = await fetch(url, {
       method: 'GET',
       signal: options.signal,
+      credentials: options.credentials || 'include',
     });
     if (!response.ok) {
       const text = await response.text();
@@ -120,6 +126,7 @@ export async function fetchApiJson(path, params = {}, options = {}) {
     headers: options.headers,
     body: options.body,
     signal: options.signal,
+    credentials: options.credentials || 'include',
   });
 
   if (!response.ok) {

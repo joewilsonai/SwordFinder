@@ -4,6 +4,7 @@ import {
   fetchApiJson,
   fetchRows,
   formatDate,
+  getApiBaseUrl,
   latestSeasonRange,
   linkForPitcher,
   linkForPlayer,
@@ -26,6 +27,11 @@ const xDraftPanel = document.getElementById('x-draft-panel');
 const xDraftText = document.getElementById('x-draft-text');
 const xDraftMeta = document.getElementById('x-draft-meta');
 const xDraftStatus = document.getElementById('x-draft-status');
+const connectXButton = document.getElementById('connect-x-account');
+const postXNowButton = document.getElementById('post-x-now');
+const xPinPanel = document.getElementById('x-pin-panel');
+const xPinInput = document.getElementById('x-pin-input');
+const verifyXPinButton = document.getElementById('verify-x-pin');
 const copyXDraftButton = document.getElementById('copy-x-draft');
 const openXDraftButton = document.getElementById('open-x-draft');
 
@@ -33,6 +39,9 @@ const season = latestSeasonRange();
 let currentSlateDate = null;
 let currentXPageUrl = '';
 let currentXShareText = '';
+let isXConnected = false;
+let xScreenName = '';
+let pendingXOAuthToken = '';
 
 function isCompleteDate(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''));
@@ -165,6 +174,7 @@ function setXDraftControls(draft = '', shareText = '') {
   currentXShareText = shareText || buildEditableShareText(draft);
   const hasDraft = Boolean(currentXShareText.trim());
   copyXDraftButton.disabled = !hasDraft;
+  postXNowButton.disabled = !hasDraft || !isXConnected;
   openXDraftButton.href = hasDraft
     ? `https://x.com/intent/post?text=${encodeURIComponent(currentXShareText)}`
     : 'https://x.com/intent/post';
@@ -174,12 +184,20 @@ function setXDraftControls(draft = '', shareText = '') {
 
 function resetXDraftPanel() {
   xDraftPanel.classList.add('hidden');
+  xPinPanel.classList.add('hidden');
   xDraftText.value = '';
+  xPinInput.value = '';
   currentXPageUrl = '';
   currentXShareText = '';
+  pendingXOAuthToken = '';
   xDraftMeta.textContent = 'Ready for selected slate';
   xDraftStatus.textContent = '';
   setXDraftControls('');
+}
+
+function renderXConnectionStatus() {
+  connectXButton.textContent = isXConnected && xScreenName ? `@${xScreenName}` : 'Connect X';
+  postXNowButton.disabled = !isXConnected || !currentXShareText;
 }
 
 function updateXDraftMeta(meta = {}) {
@@ -207,6 +225,113 @@ async function copyXDraft() {
   xDraftStatus.textContent = 'Copied.';
 }
 
+async function refreshXConnectionStatus() {
+  try {
+    const status = await fetchApiJson('/share/x/oauth/status');
+    isXConnected = Boolean(status.connected);
+    xScreenName = status.screen_name || '';
+    renderXConnectionStatus();
+    return status;
+  } catch (error) {
+    console.warn('Could not check X connection', error);
+    isXConnected = false;
+    xScreenName = '';
+    renderXConnectionStatus();
+    return null;
+  }
+}
+
+async function connectXAccount() {
+  const apiBaseUrl = getApiBaseUrl();
+  if (!apiBaseUrl) {
+    xDraftStatus.textContent = 'API base URL is required for X OAuth.';
+    return;
+  }
+
+  const authWindow = window.open('', 'swordfinder-x-oauth');
+  connectXButton.disabled = true;
+  xDraftStatus.textContent = 'Opening X authorization...';
+
+  try {
+    const payload = await fetchApiJson('/share/x/oauth/start-pin');
+    pendingXOAuthToken = payload.oauth_token || '';
+    xPinPanel.classList.remove('hidden');
+    xPinInput.value = '';
+
+    if (authWindow) {
+      authWindow.location.href = payload.authorize_url;
+      xDraftStatus.textContent = 'Authorize SwordFinder in the X tab, then paste the PIN here.';
+    } else {
+      xDraftStatus.innerHTML = `Open <a class="underline decoration-zinc-500 hover:decoration-[var(--accent-soft)]" href="${escapeHtml(payload.authorize_url)}" target="_blank" rel="noreferrer">X authorization</a>, then paste the PIN here.`;
+    }
+    xPinInput.focus();
+  } catch (error) {
+    if (authWindow) authWindow.close();
+    console.error(error);
+    xDraftStatus.textContent = error.message;
+  } finally {
+    connectXButton.disabled = false;
+  }
+}
+
+async function verifyXPin() {
+  const pin = xPinInput.value.trim();
+  if (!pendingXOAuthToken || !pin) {
+    xDraftStatus.textContent = 'Paste the X authorization PIN first.';
+    return;
+  }
+
+  verifyXPinButton.disabled = true;
+  xDraftStatus.textContent = 'Verifying X PIN...';
+
+  try {
+    const payload = await fetchApiJson('/share/x/oauth/pin', {}, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ oauth_token: pendingXOAuthToken, pin }),
+    });
+    pendingXOAuthToken = '';
+    xPinInput.value = '';
+    xPinPanel.classList.add('hidden');
+    isXConnected = true;
+    xScreenName = payload.screen_name || '';
+    renderXConnectionStatus();
+    setXDraftControls(xDraftText.value, currentXShareText);
+    xDraftStatus.textContent = `Connected${xScreenName ? ` as @${xScreenName}` : ''}.`;
+  } catch (error) {
+    console.error(error);
+    xDraftStatus.textContent = error.message;
+    await refreshXConnectionStatus();
+  } finally {
+    verifyXPinButton.disabled = false;
+  }
+}
+
+async function postXNow() {
+  const shareText = currentXShareText || buildEditableShareText(xDraftText.value);
+  if (!shareText || postXNowButton.disabled) return;
+
+  postXNowButton.disabled = true;
+  xDraftStatus.textContent = 'Posting to X...';
+
+  try {
+    const payload = await fetchApiJson('/share/x/post', {}, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date: currentSlateDate, text: shareText }),
+    });
+
+    const postUrl = payload.url || `https://x.com/${payload.screen_name || 'i'}/status/${payload.id}`;
+    xDraftStatus.innerHTML = `Posted as @${escapeHtml(payload.screen_name || xScreenName || 'connected account')}: <a class="underline decoration-zinc-500 hover:decoration-[var(--accent-soft)]" href="${escapeHtml(postUrl)}" target="_blank" rel="noreferrer">view on X</a>`;
+  } catch (error) {
+    console.error(error);
+    xDraftStatus.textContent = error.message;
+    await refreshXConnectionStatus();
+  } finally {
+    setXDraftControls(xDraftText.value, currentXShareText);
+  }
+}
+
 async function draftXPost() {
   if (!currentSlateDate || draftXPostButton.disabled) return;
 
@@ -227,7 +352,10 @@ async function draftXPost() {
     xDraftText.value = payload.draft || '';
     const shareText = payload.share_text || '';
     updateXDraftMeta({ ...payload, share_text: shareText });
-    xDraftStatus.textContent = 'Ready. Opens X composer as your signed-in account.';
+    await refreshXConnectionStatus();
+    xDraftStatus.textContent = isXConnected
+      ? `Ready to post as @${xScreenName || 'connected account'}.`
+      : 'Connect X to post directly, or use Post on X to open the composer.';
   } catch (error) {
     console.error(error);
     xDraftMeta.textContent = 'Draft unavailable';
@@ -311,12 +439,22 @@ function refreshSelectedDate() {
 dateInput.addEventListener('input', refreshSelectedDate);
 dateInput.addEventListener('change', refreshSelectedDate);
 draftXPostButton.addEventListener('click', draftXPost);
+connectXButton.addEventListener('click', connectXAccount);
+postXNowButton.addEventListener('click', postXNow);
+verifyXPinButton.addEventListener('click', verifyXPin);
 copyXDraftButton.addEventListener('click', copyXDraft);
 xDraftText.addEventListener('input', () => updateXDraftMeta());
+xPinInput.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    verifyXPin();
+  }
+});
 
 async function init() {
   try {
     setStatusText('Loading live swords for 2026');
+    await refreshXConnectionStatus();
     const latestDate = await getLatestSwordDate();
     const requestedDate = new URLSearchParams(window.location.search).get('date');
     const selectedDate = requestedDate || latestDate;

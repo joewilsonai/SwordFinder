@@ -12,9 +12,19 @@ def test_homepage_has_date_picker_for_daily_slate():
     assert "Biggest Miss" in html
     assert "Clips Ready" in html
     assert 'id="draft-x-post"' in html
+    assert 'id="connect-x-account"' in html
+    assert 'id="post-x-now"' in html
+    assert 'id="x-pin-panel"' in html
+    assert 'id="x-pin-input"' in html
+    assert 'id="verify-x-pin"' in html
     assert "Share to X" in html
     assert "Post on X" in html
     assert 'id="x-draft-panel"' in html
+    assert "What is a sword?" in html
+    assert "you'll sword yourself to the ground" in html
+    assert "Sword Score" in html
+    assert "90+ makes the board; 100+ is elite" in html
+    assert "Quote source" in html
     assert "Draft X Post" not in html
     assert "Season Swords" not in html
     assert "Slowest Bat Today" not in html
@@ -41,8 +51,18 @@ def test_homepage_loads_selected_date_top_five_swords():
     assert "release_spin_rate" in source
     assert "perceived_velocity" in source
     assert "/share/x/draft" in source
+    assert "/share/x/oauth/status" in source
+    assert "/share/x/oauth/start" in source
+    assert "/share/x/oauth/start-pin" in source
+    assert "/share/x/oauth/pin" in source
+    assert "/share/x/post" in source
     assert "payload.share_text" in source
+    assert "credentials" in Path("ui/assets/supabase-rest.js").read_text()
     assert "draftXPostButton" in source
+    assert "connectXButton" in source
+    assert "postXNowButton" in source
+    assert "pendingXOAuthToken" in source
+    assert "verifyXPin" in source
     assert "copyXDraftButton" in source
     assert "fetchCount" not in source
     assert "Sword #${idx + 1}" in source

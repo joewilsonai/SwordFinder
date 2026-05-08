@@ -2,12 +2,22 @@ import pytest
 
 from api import (
     ShareDraftRequest,
+    build_oauth1_authorization_header,
     build_x_share_text,
     build_x_post_page_url,
     build_x_post_prompt,
     build_xai_chat_payload,
+    create_x_session,
     extract_xai_draft,
+    parse_oauth_form_response,
+    prune_x_oauth_requests,
+    store_x_oauth_request,
     trim_x_post_text,
+    validate_x_post_text,
+    x_oauth_authorize_url,
+    x_safe_return_to,
+    X_OAUTH_REQUESTS,
+    X_OAUTH_SESSIONS,
 )
 
 
@@ -111,3 +121,95 @@ def test_build_x_share_text_appends_selected_slate_url_inside_limit():
     assert "Corey Seager" in text
     assert "https://swordfinder.com/?date=2026-05-06" in text
     assert len(text) <= 280
+
+
+def test_parse_oauth_form_response_reads_token_fields():
+    parsed = parse_oauth_form_response(
+        "oauth_token=request-token&oauth_token_secret=request-secret&oauth_callback_confirmed=true"
+    )
+
+    assert parsed["oauth_token"] == "request-token"
+    assert parsed["oauth_token_secret"] == "request-secret"
+    assert parsed["oauth_callback_confirmed"] == "true"
+
+
+def test_oauth1_authorization_header_contains_signature_and_token():
+    header = build_oauth1_authorization_header(
+        "POST",
+        "https://api.x.com/2/tweets",
+        "consumer-key",
+        "consumer-secret",
+        token="user-token",
+        token_secret="user-secret",
+    )
+
+    assert header.startswith("OAuth ")
+    assert 'oauth_consumer_key="consumer-key"' in header
+    assert 'oauth_token="user-token"' in header
+    assert "oauth_signature=" in header
+
+
+def test_validate_x_post_text_rejects_empty_and_over_limit():
+    assert validate_x_post_text(" hello ") == "hello"
+
+    with pytest.raises(Exception):
+        validate_x_post_text(" ")
+
+    with pytest.raises(Exception):
+        validate_x_post_text("x" * 281)
+
+
+def test_x_safe_return_to_allows_swordfinder_and_rejects_other_hosts():
+    assert x_safe_return_to("https://swordfinder.com/?date=2026-05-06") == (
+        "https://swordfinder.com/?date=2026-05-06"
+    )
+    assert x_safe_return_to("https://evil.example/?date=2026-05-06") == "https://swordfinder.com"
+
+
+def test_x_oauth_authorize_url_targets_x_authorization():
+    assert x_oauth_authorize_url("request-token") == (
+        "https://api.x.com/oauth/authorize?oauth_token=request-token"
+    )
+
+
+def test_store_x_oauth_request_tracks_request_secret_and_return(monkeypatch):
+    X_OAUTH_REQUESTS.clear()
+    monkeypatch.setattr("api.time.time", lambda: 1000)
+
+    token = store_x_oauth_request(
+        {"oauth_token": "request-token", "oauth_token_secret": "request-secret"},
+        return_to="https://swordfinder.com/?date=2026-05-06",
+    )
+
+    assert token == "request-token"
+    assert X_OAUTH_REQUESTS["request-token"]["oauth_token_secret"] == "request-secret"
+    assert X_OAUTH_REQUESTS["request-token"]["return_to"] == "https://swordfinder.com/?date=2026-05-06"
+    assert X_OAUTH_REQUESTS["request-token"]["created_at"] == 1000
+
+
+def test_prune_x_oauth_requests_removes_expired_tokens():
+    X_OAUTH_REQUESTS.clear()
+    X_OAUTH_REQUESTS["fresh"] = {"created_at": 1000}
+    X_OAUTH_REQUESTS["expired"] = {"created_at": 1}
+
+    prune_x_oauth_requests(now=1100)
+
+    assert "fresh" in X_OAUTH_REQUESTS
+    assert "expired" not in X_OAUTH_REQUESTS
+
+
+def test_create_x_session_stores_access_tokens_without_exposing_cookie_value():
+    X_OAUTH_SESSIONS.clear()
+
+    session_id, session = create_x_session(
+        {
+            "oauth_token": "access-token",
+            "oauth_token_secret": "access-secret",
+            "screen_name": "SwordFinder",
+            "user_id": "123",
+        }
+    )
+
+    assert session_id in X_OAUTH_SESSIONS
+    assert session["screen_name"] == "SwordFinder"
+    assert X_OAUTH_SESSIONS[session_id]["oauth_token_secret"] == "access-secret"
