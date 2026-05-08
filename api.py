@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime, timezone
+import httpx
 import os
 import re
 from supabase import create_client
@@ -29,6 +30,8 @@ app = FastAPI(
 default_cors_origins = [
     "http://localhost:3000",
     "http://localhost:5173",
+    "https://swordfinder.com",
+    "https://www.swordfinder.com",
     "https://ui-one-henna.vercel.app",
 ]
 
@@ -61,6 +64,10 @@ VIDEO_BACKLOG_SELECT = (
 )
 DAILY_SLATE_MAX_LIMIT = 5
 DATE_ONLY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+DEFAULT_UI_BASE_URL = "https://swordfinder.com"
+DEFAULT_XAI_MODEL = "grok-4.3"
+XAI_CHAT_COMPLETIONS_URL = "https://api.x.ai/v1/chat/completions"
+X_POST_CHAR_LIMIT = 280
 
 
 def utc_now_iso() -> str:
@@ -87,6 +94,12 @@ class HealthResponse(BaseModel):
     database: str
     project: str
     timestamp: str
+
+
+class ShareDraftRequest(BaseModel):
+    date: str
+    limit: int = DAILY_SLATE_MAX_LIMIT
+    tone: Optional[str] = "sharp, funny, and baseball-native"
 
 
 def normalize_sword_row(row: dict) -> dict:
@@ -148,6 +161,154 @@ def build_daily_slate_response(
         "pending_videos": len(find_missing_video_rows(normalized_rows)),
         "rows": normalized_rows,
         "last_checked": utc_now_iso(),
+    }
+
+
+def format_display_date(date: str) -> str:
+    dt = datetime.strptime(date, "%Y-%m-%d")
+    return dt.strftime("%B %d, %Y").replace(" 0", " ")
+
+
+def format_stat(value, decimals: int = 1, fallback: str = "--") -> str:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return fallback
+    return f"{number:.{decimals}f}"
+
+
+def build_x_post_page_url(date: str) -> str:
+    base_url = (get_env("PUBLIC_UI_BASE_URL") or get_env("UI_BASE_URL") or DEFAULT_UI_BASE_URL).rstrip("/")
+    return f"{base_url}/?date={date}"
+
+
+def build_x_post_prompt(date: str, rows: list) -> str:
+    normalized_rows = normalize_sword_rows(rows)
+    display_date = format_display_date(date)
+    page_url = build_x_post_page_url(date)
+    lines = [
+        f"Selected date: {display_date}",
+        f"SwordFinder page: {page_url}",
+        "Daily top swords:",
+    ]
+
+    for idx, row in enumerate(normalized_rows[:DAILY_SLATE_MAX_LIMIT], start=1):
+        hitter = row.get("batter_name") or row.get("player_name") or "Unknown hitter"
+        pitcher = row.get("pitcher_name") or "Unknown pitcher"
+        pitch = row.get("pitch_name") or row.get("pitch_type") or "Pitch"
+        release_speed = format_stat(row.get("release_speed"))
+        score = format_stat(row.get("sword_score"))
+        bat_speed = format_stat(row.get("bat_speed"))
+        swing_length = format_stat(row.get("swing_length"))
+        miss = format_stat(row.get("strike_zone_distance_inches"))
+        description = row.get("description") or row.get("events") or "swinging strike"
+        video_status = "video ready" if row.get("video_azure_blob_url") else "video pending"
+
+        lines.append(
+            f"{idx}. {hitter} vs {pitcher} (hitter: {hitter}; pitcher: {pitcher}): "
+            f"pitcher threw {pitch} {release_speed} mph, "
+            f"{description}, score {score}, bat {bat_speed} mph, "
+            f"swing {swing_length} ft, miss {miss} in, {video_status}"
+        )
+
+    return "\n".join(lines)
+
+
+def build_xai_chat_payload(
+    request: ShareDraftRequest,
+    rows: list,
+    model: Optional[str] = None,
+) -> dict:
+    model_name = model or get_env("XAI_MODEL") or DEFAULT_XAI_MODEL
+    tone = request.tone or "sharp, funny, and baseball-native"
+
+    return {
+        "model": model_name,
+        "stream": False,
+        "temperature": 0.7,
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "You write tight, witty baseball posts for SwordFinder. "
+                    "Return one X post under 260 characters. "
+                    "Use only facts from the provided slate. "
+                    "Do not invent scores, teams, injuries, stats, or video status. "
+                    "Never describe the hitter as throwing the pitch; hitters swing against pitchers. "
+                    "Do not write hitter possessives like 'Seager's changeup'; use pitcher possessives or 'against'. "
+                    "No markdown, no quote marks, no thread numbering."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"Tone: {tone}.\n"
+                    "Draft one post for this daily SwordFinder slate:\n\n"
+                    f"{build_x_post_prompt(request.date, rows)}"
+                ),
+            },
+        ],
+    }
+
+
+def extract_xai_draft(response_payload: dict) -> str:
+    try:
+        content = response_payload["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError) as exc:
+        raise ValueError("xAI response did not include a chat completion message") from exc
+
+    if isinstance(content, list):
+        parts = []
+        for item in content:
+            if isinstance(item, dict) and item.get("type") == "text":
+                parts.append(item.get("text", ""))
+        content = " ".join(parts)
+
+    if not isinstance(content, str) or not content.strip():
+        raise ValueError("xAI response draft was empty")
+
+    return content.strip().strip('"').strip("'").strip()
+
+
+def trim_x_post_text(text: str, limit: int = X_POST_CHAR_LIMIT) -> str:
+    normalized = re.sub(r"\s+", " ", text or "").strip()
+    if len(normalized) <= limit:
+        return normalized
+    return normalized[: max(limit - 3, 0)].rstrip() + "..."
+
+
+async def request_xai_post_draft(request: ShareDraftRequest, rows: list) -> dict:
+    api_key = get_env("XAI_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="XAI_API_KEY is not configured")
+
+    payload = build_xai_chat_payload(request, rows)
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(XAI_CHAT_COMPLETIONS_URL, headers=headers, json=payload)
+        response.raise_for_status()
+        raw = response.json()
+        draft = trim_x_post_text(extract_xai_draft(raw))
+    except httpx.HTTPStatusError as exc:
+        detail = f"xAI draft request failed with status {exc.response.status_code}"
+        raise HTTPException(status_code=502, detail=detail) from exc
+    except (httpx.RequestError, ValueError) as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return {
+        "date": request.date,
+        "draft": draft,
+        "character_count": len(draft),
+        "limit": X_POST_CHAR_LIMIT,
+        "model": payload["model"],
+        "source": "xai",
+        "page_url": build_x_post_page_url(request.date),
+        "row_count": len(rows),
     }
 
 
@@ -360,6 +521,29 @@ async def get_daily_slate(date: str, limit: int = 5, ensure_videos: bool = True)
         if hydration_error:
             response["hydration_error"] = hydration_error
         return response
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/share/x/draft")
+async def draft_x_post(request: ShareDraftRequest):
+    """Draft an editable X post for a daily top-five slate using server-side xAI."""
+    validated_date = validate_slate_date(request.date)
+    capped_limit = clamp_daily_slate_limit(request.limit)
+    normalized_request = ShareDraftRequest(
+        date=validated_date,
+        limit=capped_limit,
+        tone=request.tone,
+    )
+
+    try:
+        rows = fetch_daily_slate_rows(validated_date, capped_limit)
+        if not rows:
+            raise HTTPException(status_code=404, detail="No swords found for this date")
+
+        return await request_xai_post_draft(normalized_request, normalize_sword_rows(rows))
     except HTTPException:
         raise
     except Exception as exc:

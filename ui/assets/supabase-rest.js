@@ -116,7 +116,9 @@ export async function fetchApiJson(path, params = {}, options = {}) {
   const separator = normalizedPath.includes('?') ? '&' : '?';
   const url = `${API_BASE_URL}${normalizedPath}${query ? `${separator}${query}` : ''}`;
   const response = await fetch(url, {
-    method: 'GET',
+    method: options.method || 'GET',
+    headers: options.headers,
+    body: options.body,
     signal: options.signal,
   });
 

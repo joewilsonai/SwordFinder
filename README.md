@@ -4,8 +4,8 @@ SwordFinder finds "sword" swings in MLB Statcast data: two-strike swinging strik
 
 ## Current Production Shape
 
-- Static UI: `https://ui-one-henna.vercel.app`
-- Ops UI: `https://ui-one-henna.vercel.app/ops`
+- Static UI: `https://swordfinder.com`
+- Ops UI: `https://swordfinder.com/ops`
 - FastAPI backend: `https://swordfinder-production.up.railway.app`
 - Database: Supabase table `mlb_pitches_enhanced`
 - Video storage: Azure Blob container `swordfinder-videos`

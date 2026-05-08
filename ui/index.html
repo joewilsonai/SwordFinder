@@ -16,6 +16,9 @@
         },
       };
     </script>
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/brand/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/assets/brand/favicon-16x16.png" />
+    <link rel="apple-touch-icon" href="/assets/brand/apple-touch-icon.png" />
     <link rel="stylesheet" href="/assets/styles.css" />
   </head>
   <body>
@@ -56,11 +59,28 @@
       </section>
 
       <section class="space-y-4">
-        <div class="flex items-center justify-between gap-3">
+        <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <h2 class="brand-title text-3xl">Top 5 Daily Swords</h2>
-          <a href="/leaderboards.html" class="text-sm uppercase tracking-[0.08em] text-zinc-300 underline decoration-zinc-600 hover:decoration-[var(--accent-soft)]">Open full leaderboards</a>
+          <div class="flex flex-wrap items-center gap-3">
+            <button id="draft-x-post" class="secondary rounded-md px-3 py-2 text-sm uppercase tracking-[0.08em]" type="button">Draft X Post</button>
+            <a href="/leaderboards.html" class="text-sm uppercase tracking-[0.08em] text-zinc-300 underline decoration-zinc-600 hover:decoration-[var(--accent-soft)]">Open full leaderboards</a>
+          </div>
         </div>
         <p id="status-text" class="text-sm text-zinc-400 loading-dots"></p>
+        <div id="x-draft-panel" class="x-draft-panel hidden">
+          <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p class="text-xs uppercase tracking-[0.12em] text-zinc-500">X Draft</p>
+              <p id="x-draft-meta" class="text-sm text-zinc-400">Ready for selected slate</p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button id="copy-x-draft" class="secondary rounded-md px-3 py-2 text-sm uppercase tracking-[0.08em]" type="button" disabled>Copy</button>
+              <a id="open-x-draft" class="secondary pointer-events-none rounded-md px-3 py-2 text-sm uppercase tracking-[0.08em] opacity-50" href="https://x.com/intent/post" target="_blank" rel="noreferrer">Open X</a>
+            </div>
+          </div>
+          <textarea id="x-draft-text" class="x-draft-textarea mt-3" rows="4" maxlength="280" aria-label="Editable X post draft"></textarea>
+          <p id="x-draft-status" class="mt-2 text-sm text-zinc-400"></p>
+        </div>
         <div id="sword-cards" class="grid gap-4"></div>
         <div id="empty-state" class="hidden rounded-xl border border-dashed border-zinc-700 p-8 text-center text-zinc-400"></div>
       </section>

@@ -31,6 +31,18 @@ body {
   letter-spacing: 0.08em;
 }
 
+.app-brand {
+  color: var(--ink);
+  min-width: 0;
+}
+
+.brand-mark {
+  width: 2.25rem;
+  height: 2.25rem;
+  object-fit: contain;
+  filter: drop-shadow(0 0 14px rgba(223, 29, 47, 0.28));
+}
+
 .card {
   background: linear-gradient(160deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01));
   border: 1px solid var(--line);
@@ -80,6 +92,32 @@ body {
   border: 1px solid var(--line);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.02);
+}
+
+.x-draft-panel {
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 10px;
+  background:
+    linear-gradient(135deg, rgba(223, 29, 47, 0.12), transparent 38%),
+    rgba(255, 255, 255, 0.025);
+  padding: 1rem;
+}
+
+.x-draft-textarea {
+  width: 100%;
+  min-height: 7rem;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.5);
+  color: var(--ink);
+  padding: 0.75rem;
+  line-height: 1.35;
+}
+
+.x-draft-textarea:focus {
+  outline: 2px solid rgba(255, 107, 107, 0.35);
+  outline-offset: 2px;
 }
 
 .status-pill {

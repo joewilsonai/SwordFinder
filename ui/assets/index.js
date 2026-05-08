@@ -21,6 +21,13 @@ const selectedDateMetric = document.getElementById('metric-selected-date');
 const topScoreMetric = document.getElementById('metric-top-score');
 const biggestMissMetric = document.getElementById('metric-biggest-miss');
 const clipsReadyMetric = document.getElementById('metric-clips-ready');
+const draftXPostButton = document.getElementById('draft-x-post');
+const xDraftPanel = document.getElementById('x-draft-panel');
+const xDraftText = document.getElementById('x-draft-text');
+const xDraftMeta = document.getElementById('x-draft-meta');
+const xDraftStatus = document.getElementById('x-draft-status');
+const copyXDraftButton = document.getElementById('copy-x-draft');
+const openXDraftButton = document.getElementById('open-x-draft');
 
 const season = latestSeasonRange();
 let currentSlateDate = null;
@@ -113,6 +120,76 @@ function updateHeroMetricsFromSlate(slate, selectedDate) {
   clipsReadyMetric.textContent = rows.length ? `${readyClips} / ${rows.length}` : '--';
 }
 
+function setXDraftControls(draft = '') {
+  const hasDraft = Boolean(draft.trim());
+  copyXDraftButton.disabled = !hasDraft;
+  openXDraftButton.href = hasDraft
+    ? `https://x.com/intent/post?text=${encodeURIComponent(draft)}`
+    : 'https://x.com/intent/post';
+  openXDraftButton.classList.toggle('pointer-events-none', !hasDraft);
+  openXDraftButton.classList.toggle('opacity-50', !hasDraft);
+}
+
+function resetXDraftPanel() {
+  xDraftPanel.classList.add('hidden');
+  xDraftText.value = '';
+  xDraftMeta.textContent = 'Ready for selected slate';
+  xDraftStatus.textContent = '';
+  setXDraftControls('');
+}
+
+function updateXDraftMeta(meta = {}) {
+  const count = xDraftText.value.length;
+  const limit = Number(meta.limit || xDraftText.maxLength || 280);
+  const model = meta.model ? ` • ${meta.model}` : '';
+  xDraftMeta.textContent = `${count}/${limit} chars${model}`;
+  setXDraftControls(xDraftText.value);
+}
+
+async function copyXDraft() {
+  const draft = xDraftText.value.trim();
+  if (!draft) return;
+
+  try {
+    await navigator.clipboard.writeText(draft);
+  } catch (_) {
+    xDraftText.focus();
+    xDraftText.select();
+    document.execCommand('copy');
+  }
+
+  xDraftStatus.textContent = 'Copied.';
+}
+
+async function draftXPost() {
+  if (!currentSlateDate || draftXPostButton.disabled) return;
+
+  draftXPostButton.disabled = true;
+  xDraftPanel.classList.remove('hidden');
+  xDraftText.value = '';
+  xDraftStatus.textContent = `Drafting for ${formatDate(currentSlateDate)}`;
+  xDraftMeta.textContent = 'Working';
+  setXDraftControls('');
+
+  try {
+    const payload = await fetchApiJson('/share/x/draft', {}, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date: currentSlateDate, limit: 5 }),
+    });
+
+    xDraftText.value = payload.draft || '';
+    updateXDraftMeta(payload);
+    xDraftStatus.textContent = payload.page_url || '';
+  } catch (error) {
+    console.error(error);
+    xDraftMeta.textContent = 'Draft unavailable';
+    xDraftStatus.textContent = error.message;
+  } finally {
+    draftXPostButton.disabled = false;
+  }
+}
+
 async function loadTopCards(selectedDate) {
   if (!selectedDate) {
     emptyRoot.classList.remove('hidden');
@@ -164,6 +241,7 @@ async function refreshSlate(date, options = {}) {
   if (!isCompleteDate(date)) return;
 
   currentSlateDate = date;
+  resetXDraftPanel();
   dateInput.disabled = true;
   setStatusText(`Loading top 5 swords for ${formatDate(date)}`);
 
@@ -185,6 +263,9 @@ function refreshSelectedDate() {
 
 dateInput.addEventListener('input', refreshSelectedDate);
 dateInput.addEventListener('change', refreshSelectedDate);
+draftXPostButton.addEventListener('click', draftXPost);
+copyXDraftButton.addEventListener('click', copyXDraft);
+xDraftText.addEventListener('input', () => updateXDraftMeta());
 
 async function init() {
   try {
