@@ -1,0 +1,37 @@
+name: Production Smoke Check
+
+on:
+  schedule:
+    # Run after the daily data and video workflows have had time to finish.
+    - cron: '30 15 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: swordfinder-production-smoke
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check Railway API and Vercel UI
+        env:
+          API_BASE: https://swordfinder-production.up.railway.app
+          UI_BASE: https://ui-one-henna.vercel.app
+        run: |
+          set -euo pipefail
+
+          curl -fsS "$API_BASE/health" | tee health.json
+          grep -q '"database":"connected"' health.json
+
+          curl -fsS "$API_BASE/data/count?select=id&game_date=gte.2026-01-01&sword_score=gt.0" | tee count.json
+          grep -Eq '"count":[1-9][0-9]*' count.json
+
+          curl -fsS "$API_BASE/swords/recent?limit=1" | tee recent.json
+          grep -q '"sword_score"' recent.json
+
+          for route in / /leaderboards /player/608369 /pitcher/660787 /assets/index.js /assets/supabase-rest.js; do
+            curl -fsS -o /dev/null "$UI_BASE$route"
+          done

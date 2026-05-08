@@ -4,7 +4,7 @@ const API_BASE_URL = (cfg.apiBaseUrl || '').replace(/\/$/, '');
 const SUPABASE_URL = (cfg.supabaseUrl || '').replace(/\/$/, '');
 const SUPABASE_ANON_KEY = cfg.supabaseAnonKey || '';
 
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+if (!API_BASE_URL && (!SUPABASE_URL || !SUPABASE_ANON_KEY)) {
   // Keep UI renderable even if config is missing.
   console.error('Missing SWORDFINDER_CONFIG.supabaseUrl or supabaseAnonKey');
 }

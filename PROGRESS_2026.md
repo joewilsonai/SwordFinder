@@ -102,3 +102,25 @@
 
 ### Notes
 - Legacy API routes (`/swords/*`) were failing due strict response typing on nullable fields; model was relaxed and endpoint now returns data successfully.
+
+---
+
+## 2026-05-07 20:30 CDT
+
+### Cleanup/Stabilization Pass
+- Verified current production state before cleanup:
+  - Railway `/health` reports database connected.
+  - Railway `/data/count` and `/data/rows` return live 2026 data.
+  - `/swords/recent?limit=1` returns a current 2026 clip.
+  - Vercel routes `/`, `/leaderboards`, `/player/:id`, `/pitcher/:id`, and core JS assets return `200`.
+  - GitHub Actions are active with recent successful daily update and video processing runs.
+- Added regression tests for legacy API sword-row normalization and UI config warning behavior.
+- Normalized legacy `/swords/*` responses so hitter-facing `player_name` uses `batter_name`, while preserving raw Statcast `player_name` as `source_player_name`.
+- Suppressed missing Supabase config console noise when the UI is correctly using `apiBaseUrl`.
+- Removed the independent schedule from video processing so it runs after successful data updates or by manual dispatch.
+- Added a production smoke workflow for Railway API and Vercel UI checks.
+- Refreshed operational docs to match the 2026 Railway/API-first architecture.
+
+### Next Steps
+- Commit the stabilization slice.
+- Start the next functionality pass from a clean repo state.

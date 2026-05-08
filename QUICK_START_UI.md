@@ -1,163 +1,68 @@
-# 🚀 SwordFinder UI Quick Start Guide
+# SwordFinder UI Quick Start
 
-**Supabase Project**: Swordfinder  
-**Project ID**: seagurfpitfslyxxxztw  
-**SQL Editor**: https://app.supabase.com/project/seagurfpitfslyxxxztw/sql/new
+The current UI is a static vanilla JavaScript app in `ui/`. There is no build step.
 
-## 📋 Pre-UI Checklist (Run These First!)
+## Local Run
 
-### 1️⃣ Database Setup (~20 minutes total)
 ```bash
-# Run the interactive setup script
-python setup_database_for_ui.py
+cd /Users/joewilson/pythonprojects/swordfinder/SwordFinder/ui
+python3 -m http.server 3000
 ```
 
-This will guide you through:
-- Adding missing database columns
-- Calculating perceived velocity (~5 min)
-- Calculating strike zone distance (~5 min)
-- Calculating all percentiles (~10 min)
-- Testing daily updates
+Open:
 
-### 2️⃣ Install API Dependencies
+- `http://localhost:3000/index.html`
+- `http://localhost:3000/leaderboards.html`
+- `http://localhost:3000/player/[id].html?id=608369`
+- `http://localhost:3000/pitcher/[id].html?id=660787`
+
+## Runtime Config
+
+The UI reads `ui/assets/config.js`.
+
+Production uses:
+
+```js
+window.SWORDFINDER_CONFIG = {
+  apiBaseUrl: "https://swordfinder-production.up.railway.app",
+  supabaseUrl: "",
+  supabaseAnonKey: "",
+  seasonYear: 2026,
+  appName: "SwordFinder",
+};
+```
+
+When `apiBaseUrl` is set, the browser uses Railway endpoints and does not need Supabase credentials.
+
+## Deploy
+
+Deploy `ui/` as the Vercel project root. The existing `ui/vercel.json` rewrites dynamic profile routes:
+
+- `/player/:id`
+- `/pitcher/:id`
+
+Production URL:
+
+- `https://ui-one-henna.vercel.app`
+
+## Data Access
+
+Use helpers in `ui/assets/supabase-rest.js`:
+
+- `fetchRows(table, params)`
+- `fetchCount(table, params)`
+- `latestSeasonRange()`
+- `linkForPlayer(row)`
+- `linkForPitcher(row)`
+
+Prefer these helpers instead of hand-rolling fetch calls so the UI stays API-first.
+
+## Local Verification
+
 ```bash
-pip install -r requirements.txt
+cd /Users/joewilson/pythonprojects/swordfinder/SwordFinder
+PYTHONPATH=. .venv/bin/pytest tests/test_ui_config.py -q
+for route in / /leaderboards /player/608369 /pitcher/660787 /assets/index.js; do
+  curl -fsS -o /dev/null "https://ui-one-henna.vercel.app$route"
+done
 ```
-
-### 3️⃣ Test the API
-```bash
-# Start the API server
-uvicorn api:app --reload
-
-# In another terminal, test endpoints:
-curl http://localhost:8000/health
-curl http://localhost:8000/stats/overview
-curl http://localhost:8000/swords/recent
-```
-
-## 🎨 Building Your UI
-
-### Option 1: React (Recommended)
-```bash
-# Create React app
-npx create-react-app swordfinder-ui
-cd swordfinder-ui
-
-# Install dependencies
-npm install axios
-
-# Start development server
-npm start
-```
-
-Example component:
-```jsx
-import { useState, useEffect } from 'react';
-import axios from 'axios';
-
-function RecentSwords() {
-  const [swords, setSwords] = useState([]);
-  
-  useEffect(() => {
-    axios.get('http://localhost:8000/swords/recent')
-      .then(res => setSwords(res.data));
-  }, []);
-  
-  return (
-    <div>
-      {swords.map(sword => (
-        <div key={sword.id}>
-          <h3>{sword.player_name} - {sword.sword_score.toFixed(1)}</h3>
-          <video src={sword.video_azure_blob_url} controls />
-        </div>
-      ))}
-    </div>
-  );
-}
-```
-
-### Option 2: Simple HTML + JavaScript
-```html
-<!DOCTYPE html>
-<html>
-<head>
-  <title>SwordFinder</title>
-</head>
-<body>
-  <div id="swords"></div>
-  
-  <script>
-    fetch('http://localhost:8000/swords/recent')
-      .then(res => res.json())
-      .then(swords => {
-        const html = swords.map(s => `
-          <div>
-            <h3>${s.player_name} - Score: ${s.sword_score}</h3>
-            <video src="${s.video_azure_blob_url}" controls width="400"></video>
-          </div>
-        `).join('');
-        document.getElementById('swords').innerHTML = html;
-      });
-  </script>
-</body>
-</html>
-```
-
-## 📊 Available API Endpoints
-
-- `GET /health` - API health check
-- `GET /stats/overview` - Database statistics
-- `GET /swords/recent?limit=10` - Recent swords with videos
-- `GET /swords/worst?limit=20` - All-time worst swords
-- `GET /swords/top/{date}` - Top swords for a date
-- `GET /players/{player_name}/swords` - Player's sword history
-- `GET /search/players?q=query` - Search players
-
-## 🎯 UI Feature Ideas
-
-### Essential Features
-- [ ] Video player with controls
-- [ ] Sword leaderboard (sortable)
-- [ ] Player search
-- [ ] Date picker for daily swords
-- [ ] Stats dashboard
-
-### Cool Features
-- [ ] Side-by-side video comparison
-- [ ] Sword score breakdown visualization
-- [ ] Player sword timeline
-- [ ] Pitch zone visualization
-- [ ] Extension vs perceived velocity chart
-
-### Advanced Features
-- [ ] Video slow-motion controls
-- [ ] Share sword clips
-- [ ] Player vs player comparisons
-- [ ] Team sword rankings
-- [ ] Live updates during games
-
-## 🔧 Environment Variables
-
-Create `.env` in your UI project:
-```env
-REACT_APP_API_URL=http://localhost:8000
-```
-
-## 🚨 Common Issues
-
-1. **CORS Error**: Make sure API is running with CORS enabled
-2. **No Videos**: Check Azure blob URLs are accessible
-3. **Empty Results**: Run data population scripts first
-4. **Slow Queries**: Add database indexes (already in SQL)
-
-## 🎉 Next Steps
-
-1. Start with displaying recent swords
-2. Add video player functionality
-3. Implement search and filters
-4. Add visualizations
-5. Deploy to production!
-
----
-
-**Need help?** The API is self-documenting at http://localhost:8000/docs 

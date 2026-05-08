@@ -45,13 +45,13 @@ SwordFinder has been revived for the 2026 MLB season and is operational end-to-e
 ## What is not fully ideal yet
 - SQL RPC percentile updater (`calculate_percentiles_sql.py`) still times out on larger updates.
   - Mitigation exists (`calculate_percentiles_year.py`), but SQL path itself remains constrained.
-- Local workflow YAML hardening changes are not pushed yet.
-  - Current GitHub token lacks `workflow` scope for updating `.github/workflows/*`.
-  - Workflows are still active and validated via manual runs on current remote definitions.
+- Workflow YAML hardening was later committed and pushed.
+  - Video processing now runs after successful data updates instead of also running on a separate schedule.
+  - Production smoke checks cover the live API and UI.
 - Vercel custom domain was not attached from CLI in this run.
   - Production alias is active on `ui-one-henna.vercel.app`.
-- Public anon key is currently present in UI runtime config (`ui/assets/config.js`).
-  - This is not a secret key, but can be moved to runtime env injection for cleaner governance.
+- UI runtime config is API-first.
+  - `ui/assets/config.js` points at Railway and leaves browser Supabase keys blank by default.
 
 ## Key risks found and mitigated
 - Offset pagination caused incomplete reads/processing.
@@ -64,8 +64,8 @@ SwordFinder has been revived for the 2026 MLB season and is operational end-to-e
 ## What I would do differently next pass
 1. Add a single schema migration baseline (`migrations/2026_revival.sql`) and run it before any script execution.
 2. Introduce one canonical pagination utility to eliminate future offset regressions.
-3. Replace direct public config in UI with runtime env injection at deploy time.
-4. Add lightweight CI checks for script smoke tests and frontend route health.
+3. Keep direct Supabase reads as fallback only; use Railway API reads in production.
+4. Keep lightweight smoke checks for API, frontend routes, and script imports.
 
 ## Files produced for this revival
 - `AUDIT_2026.md`

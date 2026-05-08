@@ -1,87 +1,46 @@
 # GitHub Actions Workflows
 
-## 1. Daily MLB Data Update
+## Daily MLB Data Update
 
-The `daily-update.yml` workflow automatically fetches yesterday's MLB data every day.
+File: `daily-update.yml`
 
-## 2. Process Daily Sword Videos
+- Runs daily at 13:00 UTC.
+- Can be triggered manually.
+- Fetches yesterday's Statcast data, scores swords, and updates Supabase.
 
-The `process-daily-videos.yml` workflow downloads and processes videos for the top sword swings.
+## Process Daily Sword Videos
 
-### Video Processing Details
+File: `process-daily-videos.yml`
 
-#### Schedule
-- Runs at 2:00 PM UTC (7 AM PST / 10 AM EST) - 1 hour after data update
-- ALSO runs automatically when "Daily MLB Data Update" completes
-- Can be triggered manually from Actions tab
+- Runs after `Daily MLB Data Update` completes successfully.
+- Can be triggered manually.
+- Processes the top sword swings for the target date and uploads available videos to Azure Blob.
 
-#### What it does
-1. Queries database for yesterday's top 10 sword swings (by sword_score)
-2. Fetches MLB play IDs for each swing
-3. Downloads videos from MLB (typically 5-7 succeed out of 10)
-4. Uploads videos to Azure Blob Storage
-5. Updates database with video URLs
+The video workflow is intentionally not independently scheduled. The `workflow_run` trigger keeps it tied to a successful data refresh and avoids duplicate daily video passes.
 
-#### Why it's separate
-- Video processing takes longer (30-60 seconds per video)
-- Not all swings have videos available (~40% missing)
-- Allows data update to complete quickly
-- Can be re-run independently if videos fail
+## Production Smoke Check
 
----
+File: `production-smoke.yml`
 
-## Original Daily Update Details
+- Runs daily at 15:30 UTC.
+- Can be triggered manually.
+- Checks Railway `/health`, live API data, `/swords/recent`, and core Vercel routes.
 
-### Schedule
-- Runs daily at 1:00 PM UTC (6 AM PST / 9 AM EST)
-- Can also be triggered manually from the Actions tab
+## Required Secrets
 
-### What it does
-1. Fetches yesterday's MLB pitch data from pybaseball
-2. Calculates sword scores for each pitch
-3. Calculates perceived velocity and strike zone distance
-4. Updates percentiles using cached distributions
-5. Inserts all data into Supabase
-6. Logs the top sword swings of the day
-
-### Required Secrets
-Set these in your repository settings (Settings → Secrets and variables → Actions):
-
-```
-SUPABASE_URL                    # Your Supabase project URL
-SUPABASE_ANON_KEY              # Supabase anonymous key
-SUPABASE_SERVICE_ROLE_KEY      # Supabase service role key (if needed)
-DATABASE_URL                   # PostgreSQL connection string
-AZURE_STORAGE_CONNECTION_STRING # For video storage
-AZURE_CONTAINER_NAME           # Azure container name
+```text
+SUPABASE_URL
+SUPABASE_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY
+DATABASE_URL
+AZURE_STORAGE_CONNECTION_STRING
+AZURE_CONTAINER_NAME
 ```
 
-### Manual Trigger
-1. Go to the Actions tab in your GitHub repository
-2. Select "Daily MLB Data Update"
-3. Click "Run workflow"
-4. Choose the branch and click "Run workflow"
+## Useful Commands
 
-### Monitoring
-- Check the Actions tab for run history
-- Failed runs will show in red
-- Logs are saved as artifacts for 7 days
-- Download logs by clicking on a workflow run → Artifacts → daily-update-logs
-
-### Troubleshooting
-If the workflow fails:
-1. Check the logs in the failed workflow run
-2. Verify all secrets are set correctly
-3. Ensure the database has enough space
-4. Check if MLB API is available
-
-### Cost Considerations
-- GitHub Actions provides 2,000 free minutes/month for private repos
-- Each run takes ~2-3 minutes
-- 30 daily runs = ~90 minutes/month (well under the limit)
-
-### Future Enhancements
-- Add Slack/email notifications on failure
-- Add data quality checks
-- Process videos for top swords automatically
-- Generate daily reports 
+```bash
+gh workflow list --repo PoliTwit1984/SwordFinder
+gh run list --repo PoliTwit1984/SwordFinder --limit 10
+gh run view <run-id> --repo PoliTwit1984/SwordFinder
+```

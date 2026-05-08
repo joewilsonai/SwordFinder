@@ -57,6 +57,7 @@ RESERVED_QUERY_KEYS = {"table", "select", "order", "limit", "offset"}
 class SwordSwing(BaseModel):
     id: Optional[int] = None
     player_name: Optional[str] = None
+    source_player_name: Optional[str] = None
     pitcher_name: Optional[str] = None
     game_date: Optional[str] = None
     bat_speed: Optional[float] = None
@@ -73,6 +74,25 @@ class HealthResponse(BaseModel):
     database: str
     project: str
     timestamp: str
+
+
+def normalize_sword_row(row: dict) -> dict:
+    """Present legacy sword rows from the hitter perspective."""
+    normalized = dict(row)
+    source_player_name = row.get("player_name")
+    batter_name = row.get("batter_name")
+    pitcher_name = row.get("pitcher_name") or source_player_name
+
+    if batter_name:
+        normalized["source_player_name"] = source_player_name
+        normalized["player_name"] = batter_name
+    normalized["pitcher_name"] = pitcher_name
+
+    return normalized
+
+
+def normalize_sword_rows(rows: list) -> list:
+    return [normalize_sword_row(row) for row in rows]
 
 
 def _apply_filter(query, column: str, expression: str):
@@ -204,7 +224,7 @@ async def get_recent_swords(limit: int = 10):
             .limit(limit)\
             .execute()
         
-        return result.data
+        return normalize_sword_rows(result.data)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -220,7 +240,7 @@ async def get_top_swords_by_date(date: str, limit: int = 10):
             .limit(limit)\
             .execute()
         
-        return result.data
+        return normalize_sword_rows(result.data)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -245,13 +265,13 @@ async def get_player_swords(player_name: str, limit: int = 50):
     try:
         result = supabase.table('mlb_pitches_enhanced')\
             .select('*')\
-            .eq('player_name', player_name)\
+            .eq('batter_name', player_name)\
             .gt('sword_score', 0)\
             .order('sword_score', desc=True)\
             .limit(limit)\
             .execute()
         
-        return result.data
+        return normalize_sword_rows(result.data)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -290,14 +310,14 @@ async def search_players(q: str, limit: int = 10):
     """Search for players by name"""
     try:
         result = supabase.table('mlb_pitches_enhanced')\
-            .select('player_name')\
-            .ilike('player_name', f'%{q}%')\
+            .select('batter_name')\
+            .ilike('batter_name', f'%{q}%')\
             .gt('sword_score', 0)\
             .limit(1000)\
             .execute()
         
         # Get unique players
-        players = list(set([r['player_name'] for r in result.data]))
+        players = list(set([r['batter_name'] for r in result.data if r.get('batter_name')]))
         players.sort()
         
         return players[:limit]

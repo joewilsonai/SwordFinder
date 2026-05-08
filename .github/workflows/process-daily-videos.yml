@@ -1,9 +1,6 @@
 name: Process Daily Sword Videos
 
 on:
-  schedule:
-    # Run at 2:00 PM UTC (7 AM PST / 10 AM EST) - 1 hour after data update
-    - cron: '0 14 * * *'
   workflow_dispatch:  # Allow manual triggering
   workflow_run:
     workflows: ["Daily MLB Data Update"]
