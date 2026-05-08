@@ -3,7 +3,9 @@ import pytest
 from api import (
     ShareDraftRequest,
     build_oauth1_authorization_header,
+    build_top_sword_post_text,
     build_x_share_text,
+    build_x_post_body,
     build_x_post_page_url,
     build_x_post_prompt,
     build_xai_chat_payload,
@@ -121,6 +123,28 @@ def test_build_x_share_text_appends_selected_slate_url_inside_limit():
     assert "Corey Seager" in text
     assert "https://swordfinder.com/?date=2026-05-06" in text
     assert len(text) <= 280
+
+
+def test_build_top_sword_post_text_includes_video_stats_and_page_url():
+    text = build_top_sword_post_text("2026-05-06", SAMPLE_ROWS[0])
+
+    assert "Sword of the Day" in text
+    assert "Corey Seager vs De Los Santos, Yerry" in text
+    assert "Changeup 88.9 mph" in text
+    assert "Score 105.3" in text
+    assert "bat 32.0 mph" in text
+    assert "swing 6.0 ft" in text
+    assert "miss 11.8 in" in text
+    assert "https://swordfinder.com/?date=2026-05-06" in text
+    assert len(text) <= 280
+
+
+def test_build_x_post_body_attaches_media_id_when_present():
+    assert build_x_post_body("hello") == {"text": "hello"}
+    assert build_x_post_body("hello", media_id="12345") == {
+        "text": "hello",
+        "media": {"media_ids": ["12345"]},
+    }
 
 
 def test_parse_oauth_form_response_reads_token_fields():

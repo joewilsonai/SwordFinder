@@ -9,6 +9,7 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime, timezone
+import asyncio
 import base64
 import hashlib
 import hmac
@@ -82,9 +83,13 @@ X_OAUTH_REQUEST_TOKEN_URL = "https://api.x.com/oauth/request_token"
 X_OAUTH_AUTHORIZE_URL = "https://api.x.com/oauth/authorize"
 X_OAUTH_ACCESS_TOKEN_URL = "https://api.x.com/oauth/access_token"
 X_CREATE_POST_URL = "https://api.x.com/2/tweets"
+X_MEDIA_UPLOAD_URL = "https://upload.twitter.com/1.1/media/upload.json"
 X_OAUTH_COOKIE_NAME = "sf_x_session"
 X_OAUTH_COOKIE_MAX_AGE = 60 * 60 * 24 * 30
 X_OAUTH_REQUEST_TTL_SECONDS = 10 * 60
+X_MEDIA_CHUNK_SIZE = 4 * 1024 * 1024
+X_MEDIA_PROCESSING_MAX_WAIT_SECONDS = 60
+X_VIDEO_MAX_BYTES = 512 * 1024 * 1024
 X_OAUTH_REQUESTS = {}
 X_OAUTH_SESSIONS = {}
 
@@ -129,6 +134,12 @@ class XPostRequest(BaseModel):
 class XOAuthPinRequest(BaseModel):
     oauth_token: str
     pin: str
+
+
+class TopSwordPostRequest(BaseModel):
+    date: str
+    text: Optional[str] = None
+    dry_run: bool = False
 
 
 def normalize_sword_row(row: dict) -> dict:
@@ -291,6 +302,27 @@ def format_stat(value, decimals: int = 1, fallback: str = "--") -> str:
 def build_x_post_page_url(date: str) -> str:
     base_url = (get_env("PUBLIC_UI_BASE_URL") or get_env("UI_BASE_URL") or DEFAULT_UI_BASE_URL).rstrip("/")
     return f"{base_url}/?date={date}"
+
+
+def build_top_sword_post_text(date: str, row: dict) -> str:
+    """Build the default native-video X caption for the top sword of a day."""
+    normalized = normalize_sword_row(row)
+    hitter = normalized.get("batter_name") or normalized.get("player_name") or "Unknown hitter"
+    pitcher = normalized.get("pitcher_name") or "Unknown pitcher"
+    pitch = normalized.get("pitch_name") or normalized.get("pitch_type") or "Pitch"
+    release_speed = format_stat(normalized.get("release_speed"))
+    score = format_stat(normalized.get("sword_score"))
+    bat_speed = format_stat(normalized.get("bat_speed"))
+    swing_length = format_stat(normalized.get("swing_length"))
+    miss = format_stat(normalized.get("strike_zone_distance_inches"))
+    page_url = build_x_post_page_url(date)
+
+    body = (
+        f"Sword of the Day: {hitter} vs {pitcher}. "
+        f"{pitch} {release_speed} mph. "
+        f"Score {score} | bat {bat_speed} mph | swing {swing_length} ft | miss {miss} in."
+    )
+    return build_x_share_text(body, page_url)
 
 
 def build_x_post_prompt(date: str, rows: list) -> str:
@@ -638,21 +670,167 @@ def validate_x_post_text(text: str) -> str:
     return cleaned
 
 
-async def create_x_post(text: str, session: dict) -> dict:
+def build_x_post_body(text: str, media_id: Optional[str] = None) -> dict:
+    body = {"text": validate_x_post_text(text)}
+    if media_id:
+        body["media"] = {"media_ids": [str(media_id)]}
+    return body
+
+
+def x_user_auth_header(
+    method: str,
+    url: str,
+    session: dict,
+    request_params: Optional[dict] = None,
+) -> str:
     consumer_key = x_consumer_key()
     consumer_secret = x_consumer_secret()
     if not consumer_key or not consumer_secret:
         raise HTTPException(status_code=503, detail="X OAuth API key/secret are not configured")
 
-    body = {"text": validate_x_post_text(text)}
-    auth_header = build_oauth1_authorization_header(
-        "POST",
-        X_CREATE_POST_URL,
+    return build_oauth1_authorization_header(
+        method,
+        url,
         consumer_key,
         consumer_secret,
         token=session["oauth_token"],
         token_secret=session["oauth_token_secret"],
+        request_params=request_params,
     )
+
+
+async def download_video_bytes(video_url: str) -> tuple:
+    if not video_url:
+        raise HTTPException(status_code=409, detail="Top sword video is not available yet")
+
+    async with httpx.AsyncClient(timeout=90.0, follow_redirects=True) as client:
+        response = await client.get(video_url)
+
+    if response.status_code >= 400:
+        raise HTTPException(status_code=502, detail=f"Could not download video clip: {response.status_code}")
+    if len(response.content) > X_VIDEO_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="Video clip is too large for X upload")
+
+    media_type = response.headers.get("content-type", "").split(";")[0] or "video/mp4"
+    return response.content, media_type
+
+
+async def upload_x_video_bytes(video_bytes: bytes, media_type: str, session: dict) -> dict:
+    if not video_bytes:
+        raise HTTPException(status_code=400, detail="Video clip was empty")
+
+    init_params = {
+        "command": "INIT",
+        "total_bytes": str(len(video_bytes)),
+        "media_type": media_type or "video/mp4",
+        "media_category": "tweet_video",
+    }
+
+    async with httpx.AsyncClient(timeout=90.0) as client:
+        init_response = await client.post(
+            X_MEDIA_UPLOAD_URL,
+            headers={
+                "Authorization": x_user_auth_header(
+                    "POST",
+                    X_MEDIA_UPLOAD_URL,
+                    session,
+                    request_params=init_params,
+                )
+            },
+            data=init_params,
+        )
+        if init_response.status_code >= 400:
+            raise HTTPException(
+                status_code=502,
+                detail=f"X media INIT failed with status {init_response.status_code}: {init_response.text[:240]}",
+            )
+
+        init_payload = init_response.json()
+        media_id = init_payload.get("media_id_string") or str(init_payload.get("media_id") or "")
+        if not media_id:
+            raise HTTPException(status_code=502, detail="X media INIT response did not include a media id")
+
+        for segment_index, start in enumerate(range(0, len(video_bytes), X_MEDIA_CHUNK_SIZE)):
+            chunk = video_bytes[start:start + X_MEDIA_CHUNK_SIZE]
+            append_params = {
+                "command": "APPEND",
+                "media_id": media_id,
+                "segment_index": str(segment_index),
+            }
+            append_url = f"{X_MEDIA_UPLOAD_URL}?{urlencode(append_params)}"
+            append_response = await client.post(
+                append_url,
+                headers={"Authorization": x_user_auth_header("POST", append_url, session)},
+                files={"media": ("swordfinder.mp4", chunk, media_type or "video/mp4")},
+            )
+            if append_response.status_code >= 400:
+                raise HTTPException(
+                    status_code=502,
+                    detail=(
+                        f"X media APPEND failed with status {append_response.status_code}: "
+                        f"{append_response.text[:240]}"
+                    ),
+                )
+
+        finalize_params = {"command": "FINALIZE", "media_id": media_id}
+        finalize_response = await client.post(
+            X_MEDIA_UPLOAD_URL,
+            headers={
+                "Authorization": x_user_auth_header(
+                    "POST",
+                    X_MEDIA_UPLOAD_URL,
+                    session,
+                    request_params=finalize_params,
+                )
+            },
+            data=finalize_params,
+        )
+        if finalize_response.status_code >= 400:
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    f"X media FINALIZE failed with status {finalize_response.status_code}: "
+                    f"{finalize_response.text[:240]}"
+                ),
+            )
+
+        payload = finalize_response.json()
+        processing = payload.get("processing_info")
+        waited = 0
+        while processing and processing.get("state") in {"pending", "in_progress"}:
+            wait_seconds = max(1, min(int(processing.get("check_after_secs") or 2), 5))
+            if waited + wait_seconds > X_MEDIA_PROCESSING_MAX_WAIT_SECONDS:
+                raise HTTPException(status_code=504, detail="Timed out waiting for X video processing")
+            await asyncio.sleep(wait_seconds)
+            waited += wait_seconds
+
+            status_params = {"command": "STATUS", "media_id": media_id}
+            status_url = f"{X_MEDIA_UPLOAD_URL}?{urlencode(status_params)}"
+            status_response = await client.get(
+                status_url,
+                headers={"Authorization": x_user_auth_header("GET", status_url, session)},
+            )
+            if status_response.status_code >= 400:
+                raise HTTPException(
+                    status_code=502,
+                    detail=(
+                        f"X media STATUS failed with status {status_response.status_code}: "
+                        f"{status_response.text[:240]}"
+                    ),
+                )
+            payload = status_response.json()
+            processing = payload.get("processing_info")
+
+        if processing and processing.get("state") == "failed":
+            error = processing.get("error", {}).get("message") or "X video processing failed"
+            raise HTTPException(status_code=502, detail=error)
+
+    return {"media_id": media_id, "media_type": media_type or "video/mp4"}
+
+
+async def create_x_post(text: str, session: dict, media_id: Optional[str] = None) -> dict:
+    body = build_x_post_body(text, media_id=media_id)
+    auth_header = x_user_auth_header("POST", X_CREATE_POST_URL, session)
     async with httpx.AsyncClient(timeout=20.0) as client:
         response = await client.post(
             X_CREATE_POST_URL,
@@ -674,7 +852,15 @@ async def create_x_post(text: str, session: dict) -> dict:
         "id": post_id,
         "text": payload.get("data", {}).get("text", body["text"]),
         "url": f"https://x.com/{session.get('screen_name') or 'i'}/status/{post_id}",
+        "media_id": media_id,
     }
+
+
+async def upload_and_post_top_sword_video(text: str, video_url: str, session: dict) -> dict:
+    video_bytes, media_type = await download_video_bytes(video_url)
+    media = await upload_x_video_bytes(video_bytes, media_type, session)
+    result = await create_x_post(text, session, media_id=media["media_id"])
+    return {**result, "media": media}
 
 
 async def request_xai_post_draft(request: ShareDraftRequest, rows: list) -> dict:
@@ -1191,6 +1377,50 @@ async def post_to_x(request: Request, post: XPostRequest):
     return {
         **result,
         "date": post.date,
+        "screen_name": session.get("screen_name"),
+    }
+
+
+@app.post("/share/x/top-sword")
+async def post_top_sword_to_x(request: Request, post: TopSwordPostRequest):
+    """Publish the selected day's #1 sword with native video and stats."""
+    validated_date = validate_slate_date(post.date)
+    rows = fetch_daily_slate_rows(validated_date, 1)
+    hydrated = 0
+
+    if not rows:
+        raise HTTPException(status_code=404, detail="No swords found for this date")
+
+    top_row = normalize_sword_row(rows[0])
+    if not top_row.get("video_azure_blob_url"):
+        hydrated = await hydrate_missing_daily_slate_videos([top_row], validated_date)
+        if hydrated > 0:
+            rows = fetch_daily_slate_rows(validated_date, 1)
+            top_row = normalize_sword_row(rows[0]) if rows else top_row
+
+    if not top_row.get("video_azure_blob_url"):
+        raise HTTPException(status_code=409, detail="Top sword video is not available yet")
+
+    text = validate_x_post_text(post.text) if post.text else build_top_sword_post_text(validated_date, top_row)
+    preview = {
+        "date": validated_date,
+        "dry_run": post.dry_run,
+        "text": text,
+        "video_url": top_row.get("video_azure_blob_url"),
+        "hydrated": hydrated,
+        "top_sword": top_row,
+    }
+    if post.dry_run:
+        return preview
+
+    session = get_x_session(request)
+    if not session:
+        raise HTTPException(status_code=401, detail="Connect X before posting")
+
+    result = await upload_and_post_top_sword_video(text, top_row["video_azure_blob_url"], session)
+    return {
+        **preview,
+        **result,
         "screen_name": session.get("screen_name"),
     }
 

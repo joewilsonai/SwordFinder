@@ -29,6 +29,7 @@ const xDraftMeta = document.getElementById('x-draft-meta');
 const xDraftStatus = document.getElementById('x-draft-status');
 const connectXButton = document.getElementById('connect-x-account');
 const postXNowButton = document.getElementById('post-x-now');
+const postTopSwordVideoButton = document.getElementById('post-top-sword-video');
 const xPinPanel = document.getElementById('x-pin-panel');
 const xPinInput = document.getElementById('x-pin-input');
 const verifyXPinButton = document.getElementById('verify-x-pin');
@@ -175,6 +176,7 @@ function setXDraftControls(draft = '', shareText = '') {
   const hasDraft = Boolean(currentXShareText.trim());
   copyXDraftButton.disabled = !hasDraft;
   postXNowButton.disabled = !hasDraft || !isXConnected;
+  postTopSwordVideoButton.disabled = !isXConnected || !currentSlateDate;
   openXDraftButton.href = hasDraft
     ? `https://x.com/intent/post?text=${encodeURIComponent(currentXShareText)}`
     : 'https://x.com/intent/post';
@@ -198,6 +200,7 @@ function resetXDraftPanel() {
 function renderXConnectionStatus() {
   connectXButton.textContent = isXConnected && xScreenName ? `@${xScreenName}` : 'Connect X';
   postXNowButton.disabled = !isXConnected || !currentXShareText;
+  postTopSwordVideoButton.disabled = !isXConnected || !currentSlateDate;
 }
 
 function updateXDraftMeta(meta = {}) {
@@ -332,6 +335,35 @@ async function postXNow() {
   }
 }
 
+async function postTopSwordVideo() {
+  if (!currentSlateDate || postTopSwordVideoButton.disabled) return;
+
+  postTopSwordVideoButton.disabled = true;
+  xDraftPanel.classList.remove('hidden');
+  xDraftStatus.textContent = 'Posting #1 sword video with stats...';
+
+  try {
+    const payload = await fetchApiJson('/share/x/top-sword', {}, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date: currentSlateDate }),
+    });
+
+    if (payload.text) {
+      xDraftText.value = payload.text;
+      updateXDraftMeta({ share_text: payload.text, limit: 280 });
+    }
+    const postUrl = payload.url || `https://x.com/${payload.screen_name || 'i'}/status/${payload.id}`;
+    xDraftStatus.innerHTML = `Posted #1 video as @${escapeHtml(payload.screen_name || xScreenName || 'connected account')}: <a class="underline decoration-zinc-500 hover:decoration-[var(--accent-soft)]" href="${escapeHtml(postUrl)}" target="_blank" rel="noreferrer">view on X</a>`;
+  } catch (error) {
+    console.error(error);
+    xDraftStatus.textContent = error.message;
+    await refreshXConnectionStatus();
+  } finally {
+    renderXConnectionStatus();
+  }
+}
+
 async function draftXPost() {
   if (!currentSlateDate || draftXPostButton.disabled) return;
 
@@ -441,6 +473,7 @@ dateInput.addEventListener('change', refreshSelectedDate);
 draftXPostButton.addEventListener('click', draftXPost);
 connectXButton.addEventListener('click', connectXAccount);
 postXNowButton.addEventListener('click', postXNow);
+postTopSwordVideoButton.addEventListener('click', postTopSwordVideo);
 verifyXPinButton.addEventListener('click', verifyXPin);
 copyXDraftButton.addEventListener('click', copyXDraft);
 xDraftText.addEventListener('input', () => updateXDraftMeta());

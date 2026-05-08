@@ -14,6 +14,7 @@ def test_homepage_has_date_picker_for_daily_slate():
     assert 'id="draft-x-post"' in html
     assert 'id="connect-x-account"' in html
     assert 'id="post-x-now"' in html
+    assert 'id="post-top-sword-video"' in html
     assert 'id="x-pin-panel"' in html
     assert 'id="x-pin-input"' in html
     assert 'id="verify-x-pin"' in html
@@ -56,11 +57,14 @@ def test_homepage_loads_selected_date_top_five_swords():
     assert "/share/x/oauth/start-pin" in source
     assert "/share/x/oauth/pin" in source
     assert "/share/x/post" in source
+    assert "/share/x/top-sword" in source
     assert "payload.share_text" in source
     assert "credentials" in Path("ui/assets/supabase-rest.js").read_text()
     assert "draftXPostButton" in source
     assert "connectXButton" in source
     assert "postXNowButton" in source
+    assert "postTopSwordVideoButton" in source
+    assert "postTopSwordVideo" in source
     assert "pendingXOAuthToken" in source
     assert "verifyXPin" in source
     assert "copyXDraftButton" in source
