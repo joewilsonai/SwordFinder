@@ -1,5 +1,7 @@
+import asyncio
 import pytest
 
+import api
 from api import (
     ShareDraftRequest,
     build_oauth1_authorization_header,
@@ -171,6 +173,59 @@ def test_x_api_error_status_code_preserves_client_auth_errors():
 
     assert x_api_error_status_code(ForbiddenResponse()) == 403
     assert x_api_error_status_code(ServerResponse()) == 502
+
+
+def test_upload_x_video_retries_init_without_media_category_after_forbidden(monkeypatch):
+    calls = []
+
+    class Response:
+        def __init__(self, status_code, payload=None, text=""):
+            self.status_code = status_code
+            self._payload = payload or {}
+            self.text = text
+
+        def json(self):
+            return self._payload
+
+    class Client:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def post(self, url, headers=None, data=None, files=None, json=None):
+            calls.append({"url": url, "data": data, "files": files})
+            if data and data.get("command") == "INIT":
+                init_calls = [call for call in calls if call["data"] and call["data"].get("command") == "INIT"]
+                if len(init_calls) == 1:
+                    return Response(403, text="")
+                return Response(200, {"media_id_string": "media-123"})
+            if data and data.get("command") == "FINALIZE":
+                return Response(200, {})
+            return Response(204, {})
+
+        async def get(self, url, headers=None):
+            return Response(200, {})
+
+    monkeypatch.setattr(api.httpx, "AsyncClient", Client)
+    monkeypatch.setattr(api, "x_user_auth_header", lambda *args, **kwargs: "OAuth test")
+
+    result = asyncio.run(
+        api.upload_x_video_bytes(
+            b"video-bytes",
+            "video/mp4",
+            {"oauth_token": "token", "oauth_token_secret": "secret"},
+        )
+    )
+
+    init_calls = [call for call in calls if call["data"] and call["data"].get("command") == "INIT"]
+    assert result["media_id"] == "media-123"
+    assert init_calls[0]["data"]["media_category"] == "tweet_video"
+    assert "media_category" not in init_calls[1]["data"]
 
 
 def test_parse_oauth_form_response_reads_token_fields():

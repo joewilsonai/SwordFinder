@@ -706,6 +706,18 @@ def raise_x_api_error(action: str, response) -> None:
     )
 
 
+def x_media_init_param_options(total_bytes: int, media_type: str) -> list:
+    base_params = {
+        "command": "INIT",
+        "total_bytes": str(total_bytes),
+        "media_type": media_type or "video/mp4",
+    }
+    return [
+        {**base_params, "media_category": "tweet_video"},
+        base_params,
+    ]
+
+
 def x_user_auth_header(
     method: str,
     url: str,
@@ -748,29 +760,27 @@ async def upload_x_video_bytes(video_bytes: bytes, media_type: str, session: dic
     if not video_bytes:
         raise HTTPException(status_code=400, detail="Video clip was empty")
 
-    init_params = {
-        "command": "INIT",
-        "total_bytes": str(len(video_bytes)),
-        "media_type": media_type or "video/mp4",
-        "media_category": "tweet_video",
-    }
-
     async with httpx.AsyncClient(timeout=90.0) as client:
-        init_response = await client.post(
-            X_MEDIA_UPLOAD_URL,
-            headers={
-                "Authorization": x_user_auth_header(
-                    "POST",
-                    X_MEDIA_UPLOAD_URL,
-                    session,
-                    request_params=init_params,
-                ),
-                "Content-Type": "application/x-www-form-urlencoded",
-            },
-            data=init_params,
-        )
-        if init_response.status_code >= 400:
-            raise_x_api_error("X media INIT", init_response)
+        init_response = None
+        for init_index, init_params in enumerate(x_media_init_param_options(len(video_bytes), media_type)):
+            init_response = await client.post(
+                X_MEDIA_UPLOAD_URL,
+                headers={
+                    "Authorization": x_user_auth_header(
+                        "POST",
+                        X_MEDIA_UPLOAD_URL,
+                        session,
+                        request_params=init_params,
+                    ),
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+                data=init_params,
+            )
+            if init_response.status_code < 400:
+                break
+            should_retry_without_category = init_response.status_code == 403 and init_index == 0
+            if not should_retry_without_category:
+                raise_x_api_error("X media INIT", init_response)
 
         init_payload = init_response.json()
         media_id = init_payload.get("media_id_string") or str(init_payload.get("media_id") or "")
