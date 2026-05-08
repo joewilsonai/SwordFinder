@@ -70,7 +70,7 @@ function cardTemplate(row, idx) {
           <video data-hover-unmute="true" autoplay muted loop playsinline controls preload="metadata">
             <source src="${video}" type="video/mp4" />
           </video>
-        ` : `<div class="flex h-[230px] items-center justify-center text-sm text-zinc-500">Video not yet available</div>`}
+        ` : `<div class="video-placeholder text-sm text-zinc-500">Video not yet available</div>`}
       </div>
       <div class="grid grid-cols-3 gap-2 text-sm">
         <div class="rounded-md bg-zinc-900/80 p-2">
