@@ -82,18 +82,21 @@ X_POST_CHAR_LIMIT = 280
 X_OAUTH_REQUEST_TOKEN_URL = "https://api.x.com/oauth/request_token"
 X_OAUTH_AUTHORIZE_URL = "https://api.x.com/oauth/authorize"
 X_OAUTH_ACCESS_TOKEN_URL = "https://api.x.com/oauth/access_token"
+X_OAUTH2_TOKEN_URL = "https://api.x.com/2/oauth2/token"
 X_CREATE_POST_URL = "https://api.x.com/2/tweets"
 X_MEDIA_UPLOAD_URL = "https://upload.twitter.com/1.1/media/upload.json"
+X_MEDIA_UPLOAD_V2_BASE_URL = "https://api.x.com/2/media/upload"
+X_MEDIA_UPLOAD_V2_INITIALIZE_URL = f"{X_MEDIA_UPLOAD_V2_BASE_URL}/initialize"
 X_OAUTH_COOKIE_NAME = "sf_x_session"
 X_OAUTH_COOKIE_MAX_AGE = 60 * 60 * 24 * 30
 X_OAUTH_REQUEST_TTL_SECONDS = 10 * 60
 X_MEDIA_CHUNK_SIZE = 4 * 1024 * 1024
 X_MEDIA_PROCESSING_MAX_WAIT_SECONDS = 60
 X_VIDEO_MAX_BYTES = 512 * 1024 * 1024
-X_SHARING_ENABLED = False
-X_SHARING_DISABLED_DETAIL = "X sharing is temporarily disabled while full OAuth is rebuilt."
+X_SHARING_DISABLED_DETAIL = "X sharing requires an OAuth2 token with tweet.write and media.write."
 X_OAUTH_REQUESTS = {}
 X_OAUTH_SESSIONS = {}
+X_OAUTH2_TOKEN_CACHE = {}
 
 
 def utc_now_iso() -> str:
@@ -453,6 +456,59 @@ def x_oauth_is_configured() -> bool:
     return bool(x_consumer_key() and x_consumer_secret())
 
 
+def get_secret_env(name: str, *fallback_names: str) -> Optional[str]:
+    """Read an env secret, preferring NAME_B64 when hosts reject raw token-like values."""
+    names = (name, *fallback_names)
+    for candidate in names:
+        encoded = get_env(f"{candidate}_B64")
+        if not encoded:
+            continue
+        try:
+            decoded = base64.b64decode(encoded.strip(), validate=True).decode().strip()
+        except Exception:
+            raise HTTPException(status_code=503, detail=f"{candidate}_B64 is not valid base64")
+        return decoded or None
+
+    for candidate in names:
+        value = get_env(candidate)
+        if value:
+            return value
+    return None
+
+
+def x_oauth2_access_token() -> Optional[str]:
+    return X_OAUTH2_TOKEN_CACHE.get("access_token") or get_secret_env("X_OAUTH2_ACCESS_TOKEN")
+
+
+def x_oauth2_refresh_token() -> Optional[str]:
+    return X_OAUTH2_TOKEN_CACHE.get("refresh_token") or get_secret_env("X_OAUTH2_REFRESH_TOKEN")
+
+
+def x_oauth2_client_id() -> Optional[str]:
+    return get_secret_env("X_CLIENT_ID", "TWITTER_CLIENT_ID")
+
+
+def x_oauth2_client_secret() -> Optional[str]:
+    return get_secret_env("X_CLIENT_SECRET", "TWITTER_CLIENT_SECRET")
+
+
+def x_screen_name() -> Optional[str]:
+    return get_env("X_SCREEN_NAME") or get_env("TWITTER_SCREEN_NAME")
+
+
+def x_oauth2_is_configured() -> bool:
+    return bool(x_oauth2_access_token() or x_oauth2_refresh_token())
+
+
+def x_sharing_enabled() -> bool:
+    configured = (get_env("X_SHARING_ENABLED") or "").lower()
+    if configured in {"0", "false", "no", "off"}:
+        return False
+    if configured in {"1", "true", "yes", "on"}:
+        return True
+    return x_oauth2_is_configured()
+
+
 def x_oauth_callback_url(request: Request) -> str:
     configured = get_env("X_OAUTH_CALLBACK_URL") or get_env("TWITTER_OAUTH_CALLBACK_URL")
     if configured:
@@ -673,7 +729,7 @@ def validate_x_post_text(text: str) -> str:
 
 
 def require_x_sharing_enabled() -> None:
-    if not X_SHARING_ENABLED:
+    if not x_sharing_enabled():
         raise HTTPException(status_code=503, detail=X_SHARING_DISABLED_DETAIL)
 
 
@@ -855,6 +911,124 @@ async def upload_x_video_bytes(video_bytes: bytes, media_type: str, session: dic
     return {"media_id": media_id, "media_type": media_type or "video/mp4"}
 
 
+def x_oauth2_auth_headers(access_token: str, content_type: Optional[str] = None) -> dict:
+    headers = {"Authorization": f"Bearer {access_token}"}
+    if content_type:
+        headers["Content-Type"] = content_type
+    return headers
+
+
+async def refresh_x_oauth2_access_token() -> str:
+    refresh_token = x_oauth2_refresh_token()
+    client_id = x_oauth2_client_id()
+    if not refresh_token or not client_id:
+        raise HTTPException(status_code=503, detail=X_SHARING_DISABLED_DETAIL)
+
+    data = {
+        "grant_type": "refresh_token",
+        "refresh_token": refresh_token,
+        "client_id": client_id,
+    }
+    headers = {"Content-Type": "application/x-www-form-urlencoded"}
+    client_secret = x_oauth2_client_secret()
+    if client_secret:
+        credentials = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
+        headers["Authorization"] = f"Basic {credentials}"
+
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.post(X_OAUTH2_TOKEN_URL, headers=headers, data=data)
+
+    if response.status_code >= 400:
+        raise_x_api_error("X OAuth2 refresh", response)
+
+    payload = response.json()
+    access_token = payload.get("access_token")
+    if not access_token:
+        raise HTTPException(status_code=502, detail="X OAuth2 refresh response did not include an access token")
+
+    X_OAUTH2_TOKEN_CACHE["access_token"] = access_token
+    if payload.get("refresh_token"):
+        X_OAUTH2_TOKEN_CACHE["refresh_token"] = payload["refresh_token"]
+    return access_token
+
+
+async def get_x_oauth2_user_token(force_refresh: bool = False) -> str:
+    if not force_refresh:
+        access_token = x_oauth2_access_token()
+        if access_token:
+            return access_token
+    return await refresh_x_oauth2_access_token()
+
+
+async def upload_x_video_bytes_oauth2(video_bytes: bytes, media_type: str, access_token: str) -> dict:
+    if not video_bytes:
+        raise HTTPException(status_code=400, detail="Video clip was empty")
+
+    media_type = media_type or "video/mp4"
+    async with httpx.AsyncClient(timeout=90.0) as client:
+        init_response = await client.post(
+            X_MEDIA_UPLOAD_V2_INITIALIZE_URL,
+            headers=x_oauth2_auth_headers(access_token, "application/json"),
+            json={
+                "media_category": "tweet_video",
+                "media_type": media_type,
+                "shared": False,
+                "total_bytes": len(video_bytes),
+            },
+        )
+        if init_response.status_code >= 400:
+            raise_x_api_error("X media INIT", init_response)
+
+        init_payload = init_response.json().get("data", {})
+        media_id = str(init_payload.get("id") or "")
+        if not media_id:
+            raise HTTPException(status_code=502, detail="X media INIT response did not include a media id")
+
+        for segment_index, start in enumerate(range(0, len(video_bytes), X_MEDIA_CHUNK_SIZE)):
+            chunk = video_bytes[start:start + X_MEDIA_CHUNK_SIZE]
+            append_response = await client.post(
+                f"{X_MEDIA_UPLOAD_V2_BASE_URL}/{media_id}/append",
+                headers=x_oauth2_auth_headers(access_token),
+                data={"segment_index": str(segment_index)},
+                files={"media": ("swordfinder.mp4", chunk, media_type)},
+            )
+            if append_response.status_code >= 400:
+                raise_x_api_error("X media APPEND", append_response)
+
+        finalize_response = await client.post(
+            f"{X_MEDIA_UPLOAD_V2_BASE_URL}/{media_id}/finalize",
+            headers=x_oauth2_auth_headers(access_token),
+        )
+        if finalize_response.status_code >= 400:
+            raise_x_api_error("X media FINALIZE", finalize_response)
+
+        payload = finalize_response.json()
+        processing = payload.get("data", {}).get("processing_info")
+        waited = 0
+        while processing and processing.get("state") in {"pending", "in_progress"}:
+            wait_seconds = max(1, min(int(processing.get("check_after_secs") or 2), 5))
+            if waited + wait_seconds > X_MEDIA_PROCESSING_MAX_WAIT_SECONDS:
+                raise HTTPException(status_code=504, detail="Timed out waiting for X video processing")
+            await asyncio.sleep(wait_seconds)
+            waited += wait_seconds
+
+            status_response = await client.get(
+                X_MEDIA_UPLOAD_V2_BASE_URL,
+                headers=x_oauth2_auth_headers(access_token),
+                params={"media_id": media_id},
+            )
+            if status_response.status_code >= 400:
+                raise_x_api_error("X media STATUS", status_response)
+            payload = status_response.json()
+            processing = payload.get("data", {}).get("processing_info")
+
+        if processing and processing.get("state") == "failed":
+            error = processing.get("error", {}).get("message") or "X video processing failed"
+            raise HTTPException(status_code=502, detail=error)
+
+    return {"media_id": media_id, "media_type": media_type}
+
+
 async def create_x_post(text: str, session: dict, media_id: Optional[str] = None) -> dict:
     body = build_x_post_body(text, media_id=media_id)
     auth_header = x_user_auth_header("POST", X_CREATE_POST_URL, session)
@@ -880,8 +1054,48 @@ async def create_x_post(text: str, session: dict, media_id: Optional[str] = None
     }
 
 
-async def upload_and_post_top_sword_video(text: str, video_url: str, session: dict) -> dict:
+async def create_x_post_oauth2(text: str, access_token: str, media_id: Optional[str] = None) -> dict:
+    body = build_x_post_body(text, media_id=media_id)
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.post(
+            X_CREATE_POST_URL,
+            headers=x_oauth2_auth_headers(access_token, "application/json"),
+            json=body,
+        )
+
+    if response.status_code >= 400:
+        raise_x_api_error("X post", response)
+    payload = response.json()
+    post_id = payload.get("data", {}).get("id")
+    if not post_id:
+        raise HTTPException(status_code=502, detail="X post response did not include a post id")
+    screen_name = x_screen_name() or "i"
+    return {
+        "posted": True,
+        "id": post_id,
+        "text": payload.get("data", {}).get("text", body["text"]),
+        "url": f"https://x.com/{screen_name}/status/{post_id}",
+        "media_id": media_id,
+    }
+
+
+async def upload_and_post_top_sword_video(text: str, video_url: str, session: Optional[dict] = None) -> dict:
     video_bytes, media_type = await download_video_bytes(video_url)
+    if x_oauth2_is_configured():
+        access_token = await get_x_oauth2_user_token()
+        try:
+            media = await upload_x_video_bytes_oauth2(video_bytes, media_type, access_token)
+            result = await create_x_post_oauth2(text, access_token, media_id=media["media_id"])
+        except HTTPException as exc:
+            if exc.status_code != 401 or not x_oauth2_refresh_token():
+                raise
+            access_token = await get_x_oauth2_user_token(force_refresh=True)
+            media = await upload_x_video_bytes_oauth2(video_bytes, media_type, access_token)
+            result = await create_x_post_oauth2(text, access_token, media_id=media["media_id"])
+        return {**result, "media": media, "auth_mode": "oauth2_user_token"}
+
+    if not session:
+        raise HTTPException(status_code=401, detail="Connect X before posting")
     media = await upload_x_video_bytes(video_bytes, media_type, session)
     result = await create_x_post(text, session, media_id=media["media_id"])
     return {**result, "media": media}
@@ -1303,7 +1517,17 @@ async def draft_x_post(request: ShareDraftRequest):
 @app.get("/share/x/oauth/status")
 async def x_oauth_status(request: Request):
     """Return whether the browser has an active X posting session."""
-    if not X_SHARING_ENABLED:
+    if x_oauth2_is_configured():
+        return {
+            "configured": True,
+            "connected": True,
+            "screen_name": x_screen_name(),
+            "user_id": get_env("X_USER_ID") or get_env("TWITTER_USER_ID"),
+            "disabled": False,
+            "auth_mode": "oauth2_user_token",
+        }
+
+    if not x_sharing_enabled():
         return {
             "configured": False,
             "connected": False,
@@ -1416,6 +1640,22 @@ async def post_to_x(request: Request, post: XPostRequest):
     """Publish an approved SwordFinder post through the connected X user session."""
     require_x_sharing_enabled()
 
+    if x_oauth2_is_configured():
+        access_token = await get_x_oauth2_user_token()
+        try:
+            result = await create_x_post_oauth2(post.text, access_token)
+        except HTTPException as exc:
+            if exc.status_code != 401 or not x_oauth2_refresh_token():
+                raise
+            access_token = await get_x_oauth2_user_token(force_refresh=True)
+            result = await create_x_post_oauth2(post.text, access_token)
+        return {
+            **result,
+            "date": post.date,
+            "screen_name": x_screen_name(),
+            "auth_mode": "oauth2_user_token",
+        }
+
     session = get_x_session(request)
     if not session:
         raise HTTPException(status_code=401, detail="Connect X before posting")
@@ -1463,14 +1703,11 @@ async def post_top_sword_to_x(request: Request, post: TopSwordPostRequest):
         return preview
 
     session = get_x_session(request)
-    if not session:
-        raise HTTPException(status_code=401, detail="Connect X before posting")
-
     result = await upload_and_post_top_sword_video(text, top_row["video_azure_blob_url"], session)
     return {
         **preview,
         **result,
-        "screen_name": session.get("screen_name"),
+        "screen_name": x_screen_name() or (session.get("screen_name") if session else None),
     }
 
 

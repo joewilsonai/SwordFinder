@@ -219,7 +219,10 @@ function resetXDraftPanel() {
 function renderXConnectionStatus() {
   if (!xSharingEnabled) return;
 
-  connectXButton.textContent = isXConnected && xScreenName ? `@${xScreenName}` : 'Connect X';
+  connectXButton.textContent = isXConnected
+    ? (xScreenName ? `@${xScreenName}` : 'OAuth2 Ready')
+    : 'Connect X';
+  connectXButton.disabled = isXConnected;
   postXNowButton.disabled = !isXConnected || !currentXShareText;
   postTopSwordVideoButton.disabled = !isXConnected || !currentSlateDate;
 }
@@ -423,7 +426,7 @@ async function draftXPost() {
     updateXDraftMeta({ ...payload, share_text: shareText });
     await refreshXConnectionStatus();
     xDraftStatus.textContent = isXConnected
-      ? `Ready to post as @${xScreenName || 'connected account'}.`
+      ? `Ready to post${xScreenName ? ` as @${xScreenName}` : ' with the configured X token'}.`
       : 'Connect X to post directly, or use Post on X to open the composer.';
   } catch (error) {
     console.error(error);

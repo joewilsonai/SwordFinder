@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import pytest
 
 import api
@@ -175,25 +176,159 @@ def test_x_api_error_status_code_preserves_client_auth_errors():
     assert x_api_error_status_code(ServerResponse()) == 502
 
 
-def test_x_oauth_status_reports_disabled_while_full_oauth_is_rebuilt():
+def test_x_oauth_status_reports_disabled_without_oauth2_token(monkeypatch):
+    monkeypatch.setattr(api, "get_env", lambda name, default=None: default)
+
     class Request:
         cookies = {}
 
     status = asyncio.run(api.x_oauth_status(Request()))
 
-    assert api.X_SHARING_ENABLED is False
     assert status["configured"] is False
     assert status["connected"] is False
     assert status["disabled"] is True
-    assert "full OAuth" in status["message"]
+    assert "OAuth2 token" in status["message"]
 
 
-def test_x_draft_endpoint_is_disabled_before_external_calls():
+def test_x_oauth_status_reports_oauth2_token_ready(monkeypatch):
+    env = {"X_OAUTH2_ACCESS_TOKEN": "access-token", "X_SCREEN_NAME": "joewilsonai"}
+    monkeypatch.setattr(api, "get_env", lambda name, default=None: env.get(name, default))
+
+    class Request:
+        cookies = {}
+
+    status = asyncio.run(api.x_oauth_status(Request()))
+
+    assert status["configured"] is True
+    assert status["connected"] is True
+    assert status["disabled"] is False
+    assert status["screen_name"] == "joewilsonai"
+    assert status["auth_mode"] == "oauth2_user_token"
+
+
+def test_oauth2_env_prefers_base64_wrapped_values(monkeypatch):
+    env = {
+        "X_CLIENT_ID": "stale-client-id",
+        "X_CLIENT_ID_B64": base64.b64encode(b"real-client-id").decode(),
+        "X_CLIENT_SECRET_B64": base64.b64encode(b"real-client-secret").decode(),
+        "X_OAUTH2_ACCESS_TOKEN_B64": base64.b64encode(b"real-access-token").decode(),
+        "X_OAUTH2_REFRESH_TOKEN_B64": base64.b64encode(b"real-refresh-token").decode(),
+    }
+    monkeypatch.setattr(api, "get_env", lambda name, default=None: env.get(name, default))
+
+    assert api.x_oauth2_client_id() == "real-client-id"
+    assert api.x_oauth2_client_secret() == "real-client-secret"
+    assert api.x_oauth2_access_token() == "real-access-token"
+    assert api.x_oauth2_refresh_token() == "real-refresh-token"
+
+
+def test_x_draft_endpoint_is_disabled_without_oauth2_token(monkeypatch):
+    monkeypatch.setattr(api, "get_env", lambda name, default=None: default)
+
     with pytest.raises(api.HTTPException) as exc:
         asyncio.run(api.draft_x_post(ShareDraftRequest(date="2026-05-06")))
 
     assert exc.value.status_code == 503
-    assert "temporarily disabled" in exc.value.detail
+    assert "OAuth2 token" in exc.value.detail
+
+
+def test_oauth2_video_upload_uses_v2_media_endpoints(monkeypatch):
+    calls = []
+
+    class Response:
+        def __init__(self, status_code, payload=None, text=""):
+            self.status_code = status_code
+            self._payload = payload or {}
+            self.text = text
+
+        def json(self):
+            return self._payload
+
+    class Client:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def post(self, url, headers=None, json=None, files=None, data=None):
+            calls.append({"method": "POST", "url": url, "headers": headers, "json": json, "files": files, "data": data})
+            if url.endswith("/initialize"):
+                return Response(200, {"data": {"id": "media-123"}})
+            if url.endswith("/append"):
+                return Response(200, {"data": {"expires_at": 123}})
+            if url.endswith("/finalize"):
+                return Response(200, {"data": {"id": "media-123"}})
+            raise AssertionError(f"unexpected POST {url}")
+
+        async def get(self, url, headers=None, params=None):
+            calls.append({"method": "GET", "url": url, "headers": headers, "params": params})
+            return Response(200, {"data": {"id": "media-123"}})
+
+    monkeypatch.setattr(api.httpx, "AsyncClient", Client)
+
+    result = asyncio.run(api.upload_x_video_bytes_oauth2(b"video-bytes", "video/mp4", "oauth2-token"))
+
+    assert result["media_id"] == "media-123"
+    assert calls[0]["url"] == "https://api.x.com/2/media/upload/initialize"
+    assert calls[0]["headers"]["Authorization"] == "Bearer oauth2-token"
+    assert calls[0]["json"]["media_category"] == "tweet_video"
+    assert calls[1]["url"] == "https://api.x.com/2/media/upload/media-123/append"
+    assert calls[1]["files"]["media"][1] == b"video-bytes"
+    assert calls[2]["url"] == "https://api.x.com/2/media/upload/media-123/finalize"
+
+
+def test_oauth2_video_upload_polls_v2_status_by_media_id(monkeypatch):
+    calls = []
+
+    class Response:
+        def __init__(self, status_code, payload=None, text=""):
+            self.status_code = status_code
+            self._payload = payload or {}
+            self.text = text
+
+        def json(self):
+            return self._payload
+
+    class Client:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def post(self, url, headers=None, json=None, files=None, data=None):
+            calls.append({"method": "POST", "url": url, "headers": headers, "json": json, "files": files, "data": data})
+            if url.endswith("/initialize"):
+                return Response(200, {"data": {"id": "media-123"}})
+            if url.endswith("/append"):
+                return Response(200, {"data": {"expires_at": 123}})
+            if url.endswith("/finalize"):
+                return Response(200, {"data": {"id": "media-123", "processing_info": {"state": "pending", "check_after_secs": 1}}})
+            raise AssertionError(f"unexpected POST {url}")
+
+        async def get(self, url, headers=None, params=None):
+            calls.append({"method": "GET", "url": url, "headers": headers, "params": params})
+            return Response(200, {"data": {"id": "media-123", "processing_info": {"state": "succeeded"}}})
+
+    async def noop_sleep(seconds):
+        return None
+
+    monkeypatch.setattr(api.httpx, "AsyncClient", Client)
+    monkeypatch.setattr(api.asyncio, "sleep", noop_sleep)
+
+    result = asyncio.run(api.upload_x_video_bytes_oauth2(b"video-bytes", "video/mp4", "oauth2-token"))
+    status_calls = [call for call in calls if call["method"] == "GET"]
+
+    assert result["media_id"] == "media-123"
+    assert status_calls[0]["url"] == "https://api.x.com/2/media/upload"
+    assert status_calls[0]["params"] == {"media_id": "media-123"}
 
 
 def test_upload_x_video_retries_init_without_media_category_after_forbidden(monkeypatch):
