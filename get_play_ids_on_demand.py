@@ -10,6 +10,17 @@ import pandas as pd
 from datetime import datetime
 import re
 
+
+def normalize_half_inning(value):
+    """Map DB and MLB half-inning labels to a shared value."""
+    normalized = str(value or "").strip().lower()
+    return {
+        "bot": "bottom",
+        "bottom": "bottom",
+        "top": "top",
+    }.get(normalized, normalized)
+
+
 def get_play_id_for_pitch(game_pk, pitcher_id, batter_id, inning, inning_topbot):
     """
     Get the play ID for a specific pitch
@@ -21,6 +32,7 @@ def get_play_id_for_pitch(game_pk, pitcher_id, batter_id, inning, inning_topbot)
         response = requests.get(url, timeout=10)
         response.raise_for_status()
         game_data = response.json()
+        target_half = normalize_half_inning(inning_topbot)
         
         # Find matching at-bat
         for play in game_data.get('liveData', {}).get('plays', {}).get('allPlays', []):
@@ -30,7 +42,7 @@ def get_play_id_for_pitch(game_pk, pitcher_id, batter_id, inning, inning_topbot)
             if (matchup.get('pitcher', {}).get('id') == pitcher_id and
                 matchup.get('batter', {}).get('id') == batter_id and
                 about.get('inning') == inning and
-                about.get('halfInning', '').lower() == inning_topbot.lower()):
+                normalize_half_inning(about.get('halfInning')) == target_half):
                 
                 # Get the LAST play ID (for final pitch)
                 for event in reversed(play.get('playEvents', [])):
