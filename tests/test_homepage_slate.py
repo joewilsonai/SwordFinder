@@ -7,6 +7,12 @@ def test_homepage_has_date_picker_for_daily_slate():
     assert 'id="slate-date-input"' in html
     assert 'id="slate-refresh"' not in html
     assert ">Load</button>" not in html
+    assert "Selected Date" in html
+    assert "Top Sword Score" in html
+    assert "Biggest Miss" in html
+    assert "Clips Ready" in html
+    assert "Season Swords" not in html
+    assert "Slowest Bat Today" not in html
     assert "Top 5 Daily Swords" in html
 
 
@@ -20,4 +26,7 @@ def test_homepage_loads_selected_date_top_five_swords():
     assert "refreshButton" not in source
     assert "/daily-slate" in source
     assert "ensure_videos: 'true'" in source
+    assert "updateHeroMetricsFromSlate" in source
+    assert "metric-clips-ready" in source
+    assert "fetchCount" not in source
     assert "Sword #${idx + 1}" in source

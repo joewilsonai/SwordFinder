@@ -2,9 +2,7 @@ import {
   bindVideoHover,
   escapeHtml,
   fetchApiJson,
-  fetchCount,
   fetchRows,
-  formatCompact,
   formatDate,
   latestSeasonRange,
   linkForPitcher,
@@ -19,16 +17,21 @@ const heroDate = document.getElementById('hero-date');
 const cardsRoot = document.getElementById('sword-cards');
 const emptyRoot = document.getElementById('empty-state');
 const dateInput = document.getElementById('slate-date-input');
-const latestCount = document.getElementById('metric-latest-count');
-const seasonCount = document.getElementById('metric-season-count');
-const worstBatSpeed = document.getElementById('metric-worst-speed');
-const totalVideos = document.getElementById('metric-video-count');
+const selectedDateMetric = document.getElementById('metric-selected-date');
+const topScoreMetric = document.getElementById('metric-top-score');
+const biggestMissMetric = document.getElementById('metric-biggest-miss');
+const clipsReadyMetric = document.getElementById('metric-clips-ready');
 
 const season = latestSeasonRange();
 let currentSlateDate = null;
 
 function isCompleteDate(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''));
+}
+
+function numericValue(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
 }
 
 async function getLatestSwordDate() {
@@ -95,46 +98,19 @@ function cardTemplate(row, idx) {
   `;
 }
 
-async function loadHeroMetrics(selectedDate) {
-  const [seasonSwordCount, selectedVideoCount, selectedDayCount, worstSpeedRows] = await Promise.all([
-    fetchCount('mlb_pitches_enhanced', {
-      select: 'id',
-      sword_score: 'gt.0',
-      game_date: [`gte.${season.startDate}`, `lt.${season.endDate}`],
-    }),
-    selectedDate
-      ? fetchCount('mlb_pitches_enhanced', {
-          select: 'id',
-          sword_score: 'gt.0',
-          game_date: `eq.${selectedDate}`,
-          video_azure_blob_url: 'not.is.null',
-        })
-      : Promise.resolve(0),
-    selectedDate
-      ? fetchCount('mlb_pitches_enhanced', {
-          select: 'id',
-          sword_score: 'gt.0',
-          game_date: `eq.${selectedDate}`,
-        })
-      : Promise.resolve(0),
-    selectedDate
-      ? fetchRows('mlb_pitches_enhanced', {
-          select: 'bat_speed',
-          sword_score: 'gt.0',
-          bat_speed: 'gt.0',
-          game_date: `eq.${selectedDate}`,
-          order: 'bat_speed.asc',
-          limit: 1,
-        })
-      : Promise.resolve([]),
-  ]);
+function updateHeroMetricsFromSlate(slate, selectedDate) {
+  const rows = slate?.rows || [];
+  const topScore = numericValue(rows[0]?.sword_score);
+  const misses = rows
+    .map((row) => numericValue(row.strike_zone_distance_inches))
+    .filter((value) => value !== null);
+  const biggestMiss = misses.length ? Math.max(...misses) : null;
+  const readyClips = rows.filter((row) => row.video_azure_blob_url).length;
 
-  seasonCount.textContent = formatCompact(seasonSwordCount);
-  totalVideos.textContent = formatCompact(selectedVideoCount);
-  latestCount.textContent = formatCompact(latestDayCount);
-  worstBatSpeed.textContent = worstSpeedRows[0]?.bat_speed
-    ? `${Number(worstSpeedRows[0].bat_speed).toFixed(1)} mph`
-    : '--';
+  selectedDateMetric.textContent = selectedDate ? formatDate(selectedDate) : '--';
+  topScoreMetric.textContent = topScore !== null ? topScore.toFixed(1) : '--';
+  biggestMissMetric.textContent = biggestMiss !== null ? `${biggestMiss.toFixed(1)} in` : '--';
+  clipsReadyMetric.textContent = rows.length ? `${readyClips} / ${rows.length}` : '--';
 }
 
 async function loadTopCards(selectedDate) {
@@ -194,8 +170,8 @@ async function refreshSlate(date, options = {}) {
   try {
     if (updateUrl) updateUrlDate(date);
     heroDate.textContent = `Selected slate: ${formatDate(date)}`;
-    await loadTopCards(date);
-    await loadHeroMetrics(date);
+    const slate = await loadTopCards(date);
+    updateHeroMetricsFromSlate(slate, date);
   } finally {
     dateInput.disabled = false;
   }
