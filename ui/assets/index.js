@@ -19,13 +19,17 @@ const heroDate = document.getElementById('hero-date');
 const cardsRoot = document.getElementById('sword-cards');
 const emptyRoot = document.getElementById('empty-state');
 const dateInput = document.getElementById('slate-date-input');
-const refreshButton = document.getElementById('slate-refresh');
 const latestCount = document.getElementById('metric-latest-count');
 const seasonCount = document.getElementById('metric-season-count');
 const worstBatSpeed = document.getElementById('metric-worst-speed');
 const totalVideos = document.getElementById('metric-video-count');
 
 const season = latestSeasonRange();
+let currentSlateDate = null;
+
+function isCompleteDate(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''));
+}
 
 async function getLatestSwordDate() {
   const rows = await fetchRows('mlb_pitches_enhanced', {
@@ -181,10 +185,10 @@ function updateUrlDate(date) {
 
 async function refreshSlate(date, options = {}) {
   const { updateUrl = true } = options;
-  if (!date) return;
+  if (!isCompleteDate(date)) return;
 
-  refreshButton.disabled = true;
-  refreshButton.textContent = 'Loading';
+  currentSlateDate = date;
+  dateInput.disabled = true;
   setStatusText(`Loading top 5 swords for ${formatDate(date)}`);
 
   try {
@@ -193,22 +197,18 @@ async function refreshSlate(date, options = {}) {
     await loadTopCards(date);
     await loadHeroMetrics(date);
   } finally {
-    refreshButton.disabled = false;
-    refreshButton.textContent = 'Load';
+    dateInput.disabled = false;
   }
 }
 
-refreshButton.addEventListener('click', () => {
-  if (dateInput.value) {
+function refreshSelectedDate() {
+  if (isCompleteDate(dateInput.value) && dateInput.value !== currentSlateDate) {
     refreshSlate(dateInput.value);
   }
-});
+}
 
-dateInput.addEventListener('change', () => {
-  if (dateInput.value) {
-    refreshSlate(dateInput.value);
-  }
-});
+dateInput.addEventListener('input', refreshSelectedDate);
+dateInput.addEventListener('change', refreshSelectedDate);
 
 async function init() {
   try {
