@@ -1,0 +1,16 @@
+.env
+.env.*
+.git
+.github
+.pytest_cache
+.venv
+__pycache__
+*.csv
+*.log
+*.mp4
+*.mov
+*.avi
+*.mkv
+june22_swords/
+test_videos/
+ui/.vercel/
