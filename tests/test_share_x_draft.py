@@ -23,6 +23,7 @@ from api import (
     trim_x_post_text,
     validate_x_post_text,
     x_oauth_authorize_url,
+    x_oauth2_granted_scopes,
     x_safe_return_to,
     X_OAUTH_REQUESTS,
     X_OAUTH_SESSIONS,
@@ -192,7 +193,11 @@ def test_x_oauth_status_reports_disabled_without_oauth2_token(monkeypatch):
 
 
 def test_x_oauth_status_reports_oauth2_token_ready(monkeypatch):
-    env = {"X_OAUTH2_ACCESS_TOKEN": "access-token", "X_SCREEN_NAME": "joewilsonai"}
+    env = {
+        "X_OAUTH2_ACCESS_TOKEN": "access-token",
+        "X_OAUTH2_SCOPE": "tweet.read tweet.write users.read media.write offline.access",
+        "X_SCREEN_NAME": "joewilsonai",
+    }
     monkeypatch.setattr(api, "get_env", lambda name, default=None: env.get(name, default))
 
     class Request:
@@ -206,6 +211,8 @@ def test_x_oauth_status_reports_oauth2_token_ready(monkeypatch):
     assert status["screen_name"] == "joewilsonai"
     assert status["auth_mode"] == "oauth2_user_token"
     assert status["media_upload_enabled"] is True
+    assert status["media_write_scope"] is True
+    assert "media.write" in status["oauth2_scopes"]
 
 
 def test_x_oauth_status_reports_media_upload_disabled(monkeypatch):
@@ -239,6 +246,74 @@ def test_oauth2_env_prefers_base64_wrapped_values(monkeypatch):
     assert api.x_oauth2_client_secret() == "real-client-secret"
     assert api.x_oauth2_access_token() == "real-access-token"
     assert api.x_oauth2_refresh_token() == "real-refresh-token"
+
+
+def test_oauth2_scope_parser_reads_cache_or_env(monkeypatch):
+    env = {"X_OAUTH2_SCOPE": "tweet.read tweet.write users.read media.write offline.access"}
+    monkeypatch.setattr(api, "get_env", lambda name, default=None: env.get(name, default))
+    api.X_OAUTH2_TOKEN_CACHE.clear()
+
+    assert x_oauth2_granted_scopes() == {
+        "tweet.read",
+        "tweet.write",
+        "users.read",
+        "media.write",
+        "offline.access",
+    }
+
+    api.X_OAUTH2_TOKEN_CACHE["scope"] = "tweet.read tweet.write"
+    assert x_oauth2_granted_scopes() == {"tweet.read", "tweet.write"}
+    api.X_OAUTH2_TOKEN_CACHE.clear()
+
+
+def test_media_upload_requires_recorded_media_write_scope(monkeypatch):
+    env = {"X_MEDIA_UPLOAD_ENABLED": "true", "X_OAUTH2_SCOPE": "tweet.read tweet.write users.read"}
+    monkeypatch.setattr(api, "get_env", lambda name, default=None: env.get(name, default))
+
+    assert api.x_media_upload_enabled() is False
+
+    env["X_OAUTH2_SCOPE"] = "tweet.read tweet.write users.read media.write offline.access"
+    assert api.x_media_upload_enabled() is True
+
+
+def test_oauth2_refresh_caches_granted_scope(monkeypatch):
+    class Response:
+        status_code = 200
+
+        def json(self):
+            return {
+                "access_token": "new-access",
+                "refresh_token": "new-refresh",
+                "scope": "tweet.read tweet.write media.write offline.access users.read",
+            }
+
+    class Client:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def post(self, url, headers=None, data=None):
+            return Response()
+
+    env = {
+        "X_CLIENT_ID": "client-id",
+        "X_CLIENT_SECRET": "client-secret",
+        "X_OAUTH2_REFRESH_TOKEN": "refresh-token",
+    }
+    api.X_OAUTH2_TOKEN_CACHE.clear()
+    monkeypatch.setattr(api, "get_env", lambda name, default=None: env.get(name, default))
+    monkeypatch.setattr(api.httpx, "AsyncClient", Client)
+
+    access_token = asyncio.run(api.refresh_x_oauth2_access_token())
+
+    assert access_token == "new-access"
+    assert api.X_OAUTH2_TOKEN_CACHE["scope"] == "tweet.read tweet.write media.write offline.access users.read"
+    api.X_OAUTH2_TOKEN_CACHE.clear()
 
 
 def test_x_draft_endpoint_is_disabled_without_oauth2_token(monkeypatch):

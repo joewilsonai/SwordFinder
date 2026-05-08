@@ -489,6 +489,22 @@ def x_oauth2_refresh_token() -> Optional[str]:
     return X_OAUTH2_TOKEN_CACHE.get("refresh_token") or get_secret_env("X_OAUTH2_REFRESH_TOKEN")
 
 
+def parse_oauth2_scopes(value: Optional[str]) -> set:
+    return {scope for scope in re.split(r"[\s,]+", value or "") if scope}
+
+
+def x_oauth2_granted_scopes() -> set:
+    return parse_oauth2_scopes(
+        X_OAUTH2_TOKEN_CACHE.get("scope")
+        or get_env("X_OAUTH2_SCOPE")
+        or get_env("TWITTER_OAUTH2_SCOPE")
+    )
+
+
+def x_oauth2_has_scope(scope: str) -> bool:
+    return scope in x_oauth2_granted_scopes()
+
+
 def x_oauth2_client_id() -> Optional[str]:
     return get_secret_env("X_CLIENT_ID", "TWITTER_CLIENT_ID")
 
@@ -516,7 +532,17 @@ def x_sharing_enabled() -> bool:
 
 def x_media_upload_enabled() -> bool:
     configured = (get_env("X_MEDIA_UPLOAD_ENABLED") or "").lower()
-    return configured not in {"0", "false", "no", "off"}
+    if configured in {"0", "false", "no", "off"}:
+        return False
+
+    scopes = x_oauth2_granted_scopes()
+    if scopes:
+        return "media.write" in scopes
+
+    if x_oauth2_is_configured():
+        return False
+
+    return True
 
 
 def x_oauth_callback_url(request: Request) -> str:
@@ -959,6 +985,8 @@ async def refresh_x_oauth2_access_token() -> str:
     X_OAUTH2_TOKEN_CACHE["access_token"] = access_token
     if payload.get("refresh_token"):
         X_OAUTH2_TOKEN_CACHE["refresh_token"] = payload["refresh_token"]
+    if payload.get("scope"):
+        X_OAUTH2_TOKEN_CACHE["scope"] = payload["scope"]
     return access_token
 
 
@@ -1556,6 +1584,8 @@ async def x_oauth_status(request: Request):
             "disabled": False,
             "auth_mode": "oauth2_user_token",
             "media_upload_enabled": x_media_upload_enabled(),
+            "oauth2_scopes": sorted(x_oauth2_granted_scopes()),
+            "media_write_scope": x_oauth2_has_scope("media.write"),
         }
 
     if not x_sharing_enabled():
