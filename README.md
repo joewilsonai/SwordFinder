@@ -82,6 +82,8 @@ Direct browser reads from Supabase are fallback-only when `apiBaseUrl` is unset 
 
 Missing `video_azure_blob_url` means SwordFinder has not cached the MLB clip yet, not necessarily that the clip does not exist.
 
+Public SwordFinder surfaces use a hard sword floor of `sword_score >= 90.0`. Rows below 90 can stay in Supabase for analysis, but they should not appear in the public UI, leaderboards, profile histories, ops counts, or video backlog.
+
 The main video paths are:
 
 - Scheduled: `Process Daily Sword Videos` runs from GitHub Actions after the daily Statcast update.
@@ -154,7 +156,7 @@ Open:
 GitHub Actions:
 
 - `Daily MLB Data Update`: fetches yesterday's Statcast data, calculates sword scores, and updates Supabase.
-- `Process Daily Sword Videos`: runs after the daily data workflow succeeds, then attempts videos for top uncached sword swings.
+- `Process Daily Sword Videos`: runs after the daily data workflow succeeds, then attempts videos for top uncached sword swings at the public 90+ floor.
 - `Production Smoke Check`: checks Railway API health, live data, recent swords, and core Vercel routes.
 
 Useful local checks:
@@ -174,6 +176,7 @@ Manual video backlog runs:
 source ~/.luna/secrets/keys.env
 python process_daily_sword_videos.py --date 2026-05-06 --top-n 25
 python process_daily_sword_videos.py --date 2026-05-06 --all
+python process_season_video_backlog.py --min-score 90 --batch-size 10
 ```
 
 Daily homepage slate backfill:
@@ -203,6 +206,7 @@ VERCEL_ORG_ID=team_obaWAGPt4oUP8fqvo5zVlBsx VERCEL_PROJECT_ID=prj_mCWq6JWufw70bB
 - `api.py`: FastAPI backend, API-first UI reads, daily slate/profile hydration, ops endpoints, and xAI draft endpoint.
 - `daily_update.py`: daily Statcast ingestion and scoring.
 - `process_daily_sword_videos.py`: video processing workflow target.
+- `process_season_video_backlog.py`: manual 90+ season video backlog drain.
 - `backfill_daily_slate_videos.py`: date-range top-five video backfill helper.
 - `ui/`: static Vercel frontend.
 - `.github/workflows/`: scheduled/manual automation.

@@ -48,6 +48,7 @@ jobs:
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
         AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}
         AZURE_CONTAINER_NAME: ${{ secrets.AZURE_CONTAINER_NAME }}
+        VIDEO_MIN_SWORD_SCORE: '90'
       run: |
         # Add current directory to Python path for imports
         export PYTHONPATH="${PYTHONPATH}:${PWD}"

@@ -7,6 +7,7 @@ import logging
 from typing import Optional
 
 from api import (
+    MIN_PUBLIC_SWORD_SCORE,
     fetch_daily_slate_rows,
     find_missing_video_rows,
     hydrate_missing_daily_slate_videos,
@@ -61,7 +62,7 @@ def fetch_regular_season_sword_dates(
         query = supabase.table("mlb_pitches_enhanced")\
             .select("game_date")\
             .eq("game_type", "R")\
-            .gt("sword_score", 0)\
+            .gte("sword_score", MIN_PUBLIC_SWORD_SCORE)\
             .order("game_date")
 
         if start_date:

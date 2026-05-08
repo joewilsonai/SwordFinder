@@ -28,6 +28,7 @@ KNOWN_OPENING_DAYS = {
     2025: datetime(2025, 3, 20),
     2026: datetime(2026, 3, 25),
 }
+MIN_VIDEO_SWORD_SCORE = 90.0
 
 
 def get_known_opening_day(year):
@@ -107,7 +108,7 @@ def process_videos_for_date(date_str, supabase, video_processor, n_videos=5):
     result = supabase.table('mlb_pitches_enhanced')\
         .select('*')\
         .eq('game_date', date_str)\
-        .gt('sword_score', 0)\
+        .gte('sword_score', MIN_VIDEO_SWORD_SCORE)\
         .order('sword_score', desc=True)\
         .limit(20)\
         .execute()

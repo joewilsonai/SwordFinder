@@ -130,7 +130,7 @@ function renderPending(rows) {
 async function fetchLatestDate() {
   const rows = await fetchRows('mlb_pitches_enhanced', {
     select: 'game_date',
-    sword_score: 'gt.0',
+    sword_score: 'gte.90',
     game_date: [`gte.${season.startDate}`, `lt.${season.endDate}`],
     order: 'game_date.desc',
     limit: 1,
@@ -142,12 +142,12 @@ async function fetchSeasonCounts() {
   const [total, cached] = await Promise.all([
     fetchCount('mlb_pitches_enhanced', {
       select: 'id',
-      sword_score: 'gt.0',
+      sword_score: 'gte.90',
       game_date: [`gte.${season.startDate}`, `lt.${season.endDate}`],
     }),
     fetchCount('mlb_pitches_enhanced', {
       select: 'id',
-      sword_score: 'gt.0',
+      sword_score: 'gte.90',
       video_azure_blob_url: 'not.is.null',
       game_date: [`gte.${season.startDate}`, `lt.${season.endDate}`],
     }),

@@ -66,7 +66,7 @@ function metricTile(label, value, unit = '') {
 async function getLatestSwordDate() {
   const rows = await fetchRows('mlb_pitches_enhanced', {
     select: 'game_date',
-    sword_score: 'gt.0',
+    sword_score: 'gte.90',
     game_date: [`gte.${season.startDate}`, `lt.${season.endDate}`],
     order: 'game_date.desc',
     limit: 1,

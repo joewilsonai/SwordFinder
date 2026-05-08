@@ -16,6 +16,8 @@ from get_play_ids_on_demand import get_play_ids_for_pitches
 from clean_video_processor import EnhancedSwordVideoProcessor as MLBVideoProcessor
 from env_config import get_env
 
+MIN_VIDEO_SWORD_SCORE = 90.0
+
 # Set up logging
 logging.basicConfig(
     level=logging.INFO,
@@ -55,6 +57,7 @@ def get_yesterdays_top_swords(
     date_str: str,
     top_n: int = 10,
     process_all: bool = False,
+    min_score: float = MIN_VIDEO_SWORD_SCORE,
 ):
     """Get pending regular-season sword video rows for a date."""
 
@@ -66,18 +69,18 @@ def get_yesterdays_top_swords(
         .eq('game_date', date_str)\
         .eq('game_type', 'R')\
         .not_.is_('sword_score', 'null')\
-        .gt('sword_score', 0)\
+        .gte('sword_score', min_score)\
         .is_('video_azure_blob_url', 'null')\
         .order('sword_score', desc=True)\
         .limit(fetch_limit)\
         .execute()
     
     if not result.data:
-        logging.warning(f"No sword candidates found for {date_str}")
+        logging.warning(f"No sword candidates found for {date_str} at score >= {min_score:.1f}")
         return pd.DataFrame()
-    
+
     df = pd.DataFrame(result.data)
-    logging.info(f"Found {len(df)} sword candidates for {date_str}")
+    logging.info(f"Found {len(df)} sword candidates for {date_str} at score >= {min_score:.1f}")
     
     return select_video_backlog_rows(df, top_n=top_n, process_all=process_all)
 
@@ -181,6 +184,12 @@ def parse_args(argv=None):
         default=parse_bool(os.getenv("VIDEO_PROCESS_ALL", "false")),
         help="Process the full pending video backlog for the date, capped by the Supabase read limit.",
     )
+    parser.add_argument(
+        "--min-score",
+        type=float,
+        default=float(os.getenv("VIDEO_MIN_SWORD_SCORE", MIN_VIDEO_SWORD_SCORE)),
+        help="Minimum sword score to process. Defaults to public SwordFinder floor of 90.",
+    )
     return parser.parse_args(argv)
 
 
@@ -203,10 +212,11 @@ def main(argv=None):
     date_str = resolve_target_date(args)
 
     logging.info(
-        "Processing videos for %s (top_n=%s, process_all=%s)",
+        "Processing videos for %s (top_n=%s, process_all=%s, min_score=%.1f)",
         date_str,
         args.top_n,
         args.all,
+        args.min_score,
     )
     
     # Load environment
@@ -227,6 +237,7 @@ def main(argv=None):
         date_str,
         top_n=args.top_n,
         process_all=args.all,
+        min_score=args.min_score,
     )
     
     if top_swords.empty:

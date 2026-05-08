@@ -49,9 +49,9 @@ for field in percentile_fields:
     if done.count < total.count:
         all_percentiles_done = False
 
-# Check sword scores
-sword_done = supabase.table('mlb_pitches_enhanced').select('id', count='exact').gt('sword_score', 0).execute()
-print(f'\n⚔️  Sword scores calculated: {sword_done.count:,}')
+# Check public sword scores
+sword_done = supabase.table('mlb_pitches_enhanced').select('id', count='exact').gte('sword_score', 90).execute()
+print(f'\n⚔️  Public swords (score >= 90): {sword_done.count:,}')
 
 # Check videos processed
 video_done = supabase.table('mlb_pitches_enhanced').select('id', count='exact').not_.is_('video_azure_blob_url', 'null').execute()

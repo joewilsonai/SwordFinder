@@ -5,7 +5,7 @@ export function mountNav(active = 'home') {
   nav.innerHTML = `
     <div class="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-3 md:px-6">
       <a href="/index.html" class="flex items-center gap-2 app-brand" aria-label="SwordFinder home">
-        <img class="brand-mark" src="/assets/brand/swordfinder-mark.png" alt="" />
+        <img class="brand-mark" src="/assets/brand/swordfinder-mark-white.png" alt="" />
         <span class="brand-title text-3xl tracking-[0.14em]">SwordFinder</span>
       </a>
       <div class="flex items-center gap-4 text-sm uppercase tracking-[0.09em] md:gap-6">
