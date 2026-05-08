@@ -127,6 +127,17 @@ export async function fetchOpsJson(path, options = {}) {
 
 export function formatDate(value) {
   if (!value) return 'Unknown date';
+
+  const dateOnly = String(value).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (dateOnly) {
+    const [, year, month, day] = dateOnly;
+    return new Date(Number(year), Number(month) - 1, Number(day)).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  }
+
   const dt = new Date(value);
   if (Number.isNaN(dt.getTime())) return value;
   return dt.toLocaleDateString('en-US', {
