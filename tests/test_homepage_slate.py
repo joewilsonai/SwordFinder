@@ -7,20 +7,23 @@ def test_homepage_has_date_picker_for_daily_slate():
     assert 'id="slate-date-input"' in html
     assert 'id="slate-refresh"' not in html
     assert ">Load</button>" not in html
+    assert "Daily MLB Sword Rankings" in html
+    assert "2026 MLB Season Revival" not in html
     assert "Selected Date" in html
     assert "Top Sword Score" in html
     assert "Biggest Miss" in html
     assert "Clips Ready" in html
-    assert 'id="draft-x-post"' in html
-    assert 'id="connect-x-account"' in html
-    assert 'id="post-x-now"' in html
-    assert 'id="post-top-sword-video"' in html
-    assert 'id="x-pin-panel"' in html
-    assert 'id="x-pin-input"' in html
-    assert 'id="verify-x-pin"' in html
-    assert "Share to X" in html
-    assert "Post on X" in html
-    assert 'id="x-draft-panel"' in html
+    assert "X sharing is temporarily disabled" in html
+    assert 'id="draft-x-post"' not in html
+    assert 'id="connect-x-account"' not in html
+    assert 'id="post-x-now"' not in html
+    assert 'id="post-top-sword-video"' not in html
+    assert 'id="x-pin-panel"' not in html
+    assert 'id="x-pin-input"' not in html
+    assert 'id="verify-x-pin"' not in html
+    assert "Share to X" not in html
+    assert "Post on X" not in html
+    assert 'id="x-draft-panel"' not in html
     assert "What is a sword?" in html
     assert "you'll sword yourself to the ground" in html
     assert "Sword Score" in html
@@ -51,22 +54,9 @@ def test_homepage_loads_selected_date_top_five_swords():
     assert "Spin Rate" in source
     assert "release_spin_rate" in source
     assert "perceived_velocity" in source
-    assert "/share/x/draft" in source
-    assert "/share/x/oauth/status" in source
-    assert "/share/x/oauth/start" in source
-    assert "/share/x/oauth/start-pin" in source
-    assert "/share/x/oauth/pin" in source
-    assert "/share/x/post" in source
-    assert "/share/x/top-sword" in source
-    assert "payload.share_text" in source
+    assert "xSharingEnabled" in source
+    assert "if (xSharingEnabled)" in source
     assert "credentials" in Path("ui/assets/supabase-rest.js").read_text()
-    assert "draftXPostButton" in source
-    assert "connectXButton" in source
-    assert "postXNowButton" in source
-    assert "postTopSwordVideoButton" in source
-    assert "postTopSwordVideo" in source
-    assert "pendingXOAuthToken" in source
-    assert "verifyXPin" in source
-    assert "copyXDraftButton" in source
+    assert "draftXPostButton.addEventListener" in source
     assert "fetchCount" not in source
     assert "Sword #${idx + 1}" in source

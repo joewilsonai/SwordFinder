@@ -90,6 +90,8 @@ X_OAUTH_REQUEST_TTL_SECONDS = 10 * 60
 X_MEDIA_CHUNK_SIZE = 4 * 1024 * 1024
 X_MEDIA_PROCESSING_MAX_WAIT_SECONDS = 60
 X_VIDEO_MAX_BYTES = 512 * 1024 * 1024
+X_SHARING_ENABLED = False
+X_SHARING_DISABLED_DETAIL = "X sharing is temporarily disabled while full OAuth is rebuilt."
 X_OAUTH_REQUESTS = {}
 X_OAUTH_SESSIONS = {}
 
@@ -668,6 +670,11 @@ def validate_x_post_text(text: str) -> str:
     if len(cleaned) > X_POST_CHAR_LIMIT:
         raise HTTPException(status_code=400, detail=f"Post text must be {X_POST_CHAR_LIMIT} characters or fewer")
     return cleaned
+
+
+def require_x_sharing_enabled() -> None:
+    if not X_SHARING_ENABLED:
+        raise HTTPException(status_code=503, detail=X_SHARING_DISABLED_DETAIL)
 
 
 def build_x_post_body(text: str, media_id: Optional[str] = None) -> dict:
@@ -1271,6 +1278,8 @@ async def get_profile_swords(
 @app.post("/share/x/draft")
 async def draft_x_post(request: ShareDraftRequest):
     """Draft an editable X post for a daily top-five slate using server-side xAI."""
+    require_x_sharing_enabled()
+
     validated_date = validate_slate_date(request.date)
     capped_limit = clamp_daily_slate_limit(request.limit)
     normalized_request = ShareDraftRequest(
@@ -1294,18 +1303,31 @@ async def draft_x_post(request: ShareDraftRequest):
 @app.get("/share/x/oauth/status")
 async def x_oauth_status(request: Request):
     """Return whether the browser has an active X posting session."""
+    if not X_SHARING_ENABLED:
+        return {
+            "configured": False,
+            "connected": False,
+            "screen_name": None,
+            "user_id": None,
+            "disabled": True,
+            "message": X_SHARING_DISABLED_DETAIL,
+        }
+
     session = get_x_session(request)
     return {
         "configured": x_oauth_is_configured(),
         "connected": bool(session),
         "screen_name": session.get("screen_name") if session else None,
         "user_id": session.get("user_id") if session else None,
+        "disabled": False,
     }
 
 
 @app.get("/share/x/oauth/start")
 async def x_oauth_start(request: Request, return_to: Optional[str] = None):
     """Start X 3-legged OAuth and redirect the user to X authorization."""
+    require_x_sharing_enabled()
+
     safe_return_to = x_safe_return_to(return_to)
     callback_url = x_oauth_callback_url(request)
 
@@ -1318,6 +1340,8 @@ async def x_oauth_start(request: Request, return_to: Optional[str] = None):
 @app.get("/share/x/oauth/start-pin")
 async def x_oauth_start_pin():
     """Start X PIN-based OAuth for apps without an approved web callback."""
+    require_x_sharing_enabled()
+
     token_payload = await request_x_oauth_token("oob")
     oauth_token = store_x_oauth_request(token_payload)
     return {
@@ -1335,6 +1359,8 @@ async def x_oauth_callback(
     denied: Optional[str] = None,
 ):
     """Complete X OAuth, create a browser posting session, then return to the UI."""
+    require_x_sharing_enabled()
+
     if denied:
         return RedirectResponse(f"{DEFAULT_UI_BASE_URL}/?x=denied", status_code=302)
     if not oauth_token or not oauth_verifier:
@@ -1359,6 +1385,8 @@ async def x_oauth_callback(
 @app.post("/share/x/oauth/pin")
 async def x_oauth_pin(pin_request: XOAuthPinRequest, response: Response):
     """Complete X PIN-based OAuth and create a browser posting session."""
+    require_x_sharing_enabled()
+
     oauth_token = (pin_request.oauth_token or "").strip()
     pin = (pin_request.pin or "").strip()
     if not oauth_token or not pin:
@@ -1386,6 +1414,8 @@ async def x_oauth_pin(pin_request: XOAuthPinRequest, response: Response):
 @app.post("/share/x/post")
 async def post_to_x(request: Request, post: XPostRequest):
     """Publish an approved SwordFinder post through the connected X user session."""
+    require_x_sharing_enabled()
+
     session = get_x_session(request)
     if not session:
         raise HTTPException(status_code=401, detail="Connect X before posting")
@@ -1401,6 +1431,8 @@ async def post_to_x(request: Request, post: XPostRequest):
 @app.post("/share/x/top-sword")
 async def post_top_sword_to_x(request: Request, post: TopSwordPostRequest):
     """Publish the selected day's #1 sword with native video and stats."""
+    require_x_sharing_enabled()
+
     validated_date = validate_slate_date(post.date)
     rows = fetch_daily_slate_rows(validated_date, 1)
     hydrated = 0

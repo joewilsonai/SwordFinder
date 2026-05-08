@@ -175,6 +175,27 @@ def test_x_api_error_status_code_preserves_client_auth_errors():
     assert x_api_error_status_code(ServerResponse()) == 502
 
 
+def test_x_oauth_status_reports_disabled_while_full_oauth_is_rebuilt():
+    class Request:
+        cookies = {}
+
+    status = asyncio.run(api.x_oauth_status(Request()))
+
+    assert api.X_SHARING_ENABLED is False
+    assert status["configured"] is False
+    assert status["connected"] is False
+    assert status["disabled"] is True
+    assert "full OAuth" in status["message"]
+
+
+def test_x_draft_endpoint_is_disabled_before_external_calls():
+    with pytest.raises(api.HTTPException) as exc:
+        asyncio.run(api.draft_x_post(ShareDraftRequest(date="2026-05-06")))
+
+    assert exc.value.status_code == 503
+    assert "temporarily disabled" in exc.value.detail
+
+
 def test_upload_x_video_retries_init_without_media_category_after_forbidden(monkeypatch):
     calls = []
 

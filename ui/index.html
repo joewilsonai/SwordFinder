@@ -28,7 +28,7 @@
       <section class="hero-glow card overflow-hidden p-5 md:p-8">
         <div class="grid gap-6 md:grid-cols-12 md:items-end">
           <div class="md:col-span-8">
-            <p class="text-xs uppercase tracking-[0.15em] text-zinc-400">2026 MLB Season Revival</p>
+            <p class="text-xs uppercase tracking-[0.15em] text-zinc-400">Daily MLB Sword Rankings</p>
             <h1 class="brand-title mt-2 text-5xl leading-none text-zinc-100 md:text-7xl">Top Sword Swings</h1>
             <p id="hero-date" class="mt-3 text-lg text-zinc-300">Loading latest slate</p>
             <p class="mt-2 text-sm text-zinc-400">Autoplay is muted by default. Hover a clip to hear the crack and miss.</p>
@@ -76,35 +76,11 @@
         <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <h2 class="brand-title text-3xl">Top 5 Daily Swords</h2>
           <div class="flex flex-wrap items-center gap-3">
-            <button id="draft-x-post" class="secondary rounded-md px-3 py-2 text-sm uppercase tracking-[0.08em]" type="button">Share to X</button>
             <a href="/leaderboards.html" class="text-sm uppercase tracking-[0.08em] text-zinc-300 underline decoration-zinc-600 hover:decoration-[var(--accent-soft)]">Open full leaderboards</a>
           </div>
         </div>
         <p id="status-text" class="text-sm text-zinc-400 loading-dots"></p>
-        <div id="x-draft-panel" class="x-draft-panel hidden">
-          <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p class="text-xs uppercase tracking-[0.12em] text-zinc-500">Share to X</p>
-              <p id="x-draft-meta" class="text-sm text-zinc-400">Ready for selected slate</p>
-            </div>
-            <div class="flex flex-wrap gap-2">
-              <button id="connect-x-account" class="secondary rounded-md px-3 py-2 text-sm uppercase tracking-[0.08em]" type="button">Connect X</button>
-              <button id="post-x-now" class="secondary rounded-md px-3 py-2 text-sm uppercase tracking-[0.08em]" type="button" disabled>Post Now</button>
-              <button id="post-top-sword-video" class="secondary rounded-md px-3 py-2 text-sm uppercase tracking-[0.08em]" type="button" disabled>Post #1 Video</button>
-              <button id="copy-x-draft" class="secondary rounded-md px-3 py-2 text-sm uppercase tracking-[0.08em]" type="button" disabled>Copy Post</button>
-              <a id="open-x-draft" class="secondary pointer-events-none rounded-md px-3 py-2 text-sm uppercase tracking-[0.08em] opacity-50" href="https://x.com/intent/post" target="_blank" rel="noreferrer">Post on X</a>
-            </div>
-          </div>
-          <textarea id="x-draft-text" class="x-draft-textarea mt-3" rows="4" maxlength="280" aria-label="Editable X post draft"></textarea>
-          <div id="x-pin-panel" class="x-pin-panel mt-3 hidden">
-            <label for="x-pin-input" class="text-xs uppercase tracking-[0.12em] text-zinc-500">X authorization PIN</label>
-            <div class="mt-2 flex flex-col gap-2 sm:flex-row">
-              <input id="x-pin-input" class="x-pin-input" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="Paste PIN" />
-              <button id="verify-x-pin" class="secondary rounded-md px-3 py-2 text-sm uppercase tracking-[0.08em]" type="button">Verify PIN</button>
-            </div>
-          </div>
-          <p id="x-draft-status" class="mt-2 text-sm text-zinc-400"></p>
-        </div>
+        <!-- X sharing is temporarily disabled while full OAuth is rebuilt. -->
         <div id="sword-cards" class="grid gap-4"></div>
         <div id="empty-state" class="hidden rounded-xl border border-dashed border-zinc-700 p-8 text-center text-zinc-400"></div>
       </section>

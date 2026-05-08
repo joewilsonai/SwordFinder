@@ -35,6 +35,21 @@ const xPinInput = document.getElementById('x-pin-input');
 const verifyXPinButton = document.getElementById('verify-x-pin');
 const copyXDraftButton = document.getElementById('copy-x-draft');
 const openXDraftButton = document.getElementById('open-x-draft');
+const xSharingEnabled = Boolean(
+  draftXPostButton &&
+  xDraftPanel &&
+  xDraftText &&
+  xDraftMeta &&
+  xDraftStatus &&
+  connectXButton &&
+  postXNowButton &&
+  postTopSwordVideoButton &&
+  xPinPanel &&
+  xPinInput &&
+  verifyXPinButton &&
+  copyXDraftButton &&
+  openXDraftButton
+);
 
 const season = latestSeasonRange();
 let currentSlateDate = null;
@@ -172,6 +187,8 @@ function buildEditableShareText(draft = '') {
 }
 
 function setXDraftControls(draft = '', shareText = '') {
+  if (!xSharingEnabled) return;
+
   currentXShareText = shareText || buildEditableShareText(draft);
   const hasDraft = Boolean(currentXShareText.trim());
   copyXDraftButton.disabled = !hasDraft;
@@ -185,6 +202,8 @@ function setXDraftControls(draft = '', shareText = '') {
 }
 
 function resetXDraftPanel() {
+  if (!xSharingEnabled) return;
+
   xDraftPanel.classList.add('hidden');
   xPinPanel.classList.add('hidden');
   xDraftText.value = '';
@@ -198,12 +217,16 @@ function resetXDraftPanel() {
 }
 
 function renderXConnectionStatus() {
+  if (!xSharingEnabled) return;
+
   connectXButton.textContent = isXConnected && xScreenName ? `@${xScreenName}` : 'Connect X';
   postXNowButton.disabled = !isXConnected || !currentXShareText;
   postTopSwordVideoButton.disabled = !isXConnected || !currentSlateDate;
 }
 
 function updateXDraftMeta(meta = {}) {
+  if (!xSharingEnabled) return;
+
   if (meta.page_url) currentXPageUrl = meta.page_url;
   const count = xDraftText.value.length;
   const limit = Number(meta.limit || xDraftText.maxLength || 280);
@@ -214,6 +237,8 @@ function updateXDraftMeta(meta = {}) {
 }
 
 async function copyXDraft() {
+  if (!xSharingEnabled) return;
+
   const shareText = currentXShareText || buildEditableShareText(xDraftText.value);
   if (!shareText) return;
 
@@ -229,6 +254,8 @@ async function copyXDraft() {
 }
 
 async function refreshXConnectionStatus() {
+  if (!xSharingEnabled) return null;
+
   try {
     const status = await fetchApiJson('/share/x/oauth/status');
     isXConnected = Boolean(status.connected);
@@ -245,6 +272,8 @@ async function refreshXConnectionStatus() {
 }
 
 async function connectXAccount() {
+  if (!xSharingEnabled) return;
+
   const apiBaseUrl = getApiBaseUrl();
   if (!apiBaseUrl) {
     xDraftStatus.textContent = 'API base URL is required for X OAuth.';
@@ -278,6 +307,8 @@ async function connectXAccount() {
 }
 
 async function verifyXPin() {
+  if (!xSharingEnabled) return;
+
   const pin = xPinInput.value.trim();
   if (!pendingXOAuthToken || !pin) {
     xDraftStatus.textContent = 'Paste the X authorization PIN first.';
@@ -311,6 +342,8 @@ async function verifyXPin() {
 }
 
 async function postXNow() {
+  if (!xSharingEnabled) return;
+
   const shareText = currentXShareText || buildEditableShareText(xDraftText.value);
   if (!shareText || postXNowButton.disabled) return;
 
@@ -336,6 +369,8 @@ async function postXNow() {
 }
 
 async function postTopSwordVideo() {
+  if (!xSharingEnabled) return;
+
   if (!currentSlateDate || postTopSwordVideoButton.disabled) return;
 
   postTopSwordVideoButton.disabled = true;
@@ -365,6 +400,8 @@ async function postTopSwordVideo() {
 }
 
 async function draftXPost() {
+  if (!xSharingEnabled) return;
+
   if (!currentSlateDate || draftXPostButton.disabled) return;
 
   draftXPostButton.disabled = true;
@@ -470,24 +507,28 @@ function refreshSelectedDate() {
 
 dateInput.addEventListener('input', refreshSelectedDate);
 dateInput.addEventListener('change', refreshSelectedDate);
-draftXPostButton.addEventListener('click', draftXPost);
-connectXButton.addEventListener('click', connectXAccount);
-postXNowButton.addEventListener('click', postXNow);
-postTopSwordVideoButton.addEventListener('click', postTopSwordVideo);
-verifyXPinButton.addEventListener('click', verifyXPin);
-copyXDraftButton.addEventListener('click', copyXDraft);
-xDraftText.addEventListener('input', () => updateXDraftMeta());
-xPinInput.addEventListener('keydown', (event) => {
-  if (event.key === 'Enter') {
-    event.preventDefault();
-    verifyXPin();
-  }
-});
+if (xSharingEnabled) {
+  draftXPostButton.addEventListener('click', draftXPost);
+  connectXButton.addEventListener('click', connectXAccount);
+  postXNowButton.addEventListener('click', postXNow);
+  postTopSwordVideoButton.addEventListener('click', postTopSwordVideo);
+  verifyXPinButton.addEventListener('click', verifyXPin);
+  copyXDraftButton.addEventListener('click', copyXDraft);
+  xDraftText.addEventListener('input', () => updateXDraftMeta());
+  xPinInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      verifyXPin();
+    }
+  });
+}
 
 async function init() {
   try {
     setStatusText('Loading live swords for 2026');
-    await refreshXConnectionStatus();
+    if (xSharingEnabled) {
+      await refreshXConnectionStatus();
+    }
     const latestDate = await getLatestSwordDate();
     const requestedDate = new URLSearchParams(window.location.search).get('date');
     const selectedDate = requestedDate || latestDate;
