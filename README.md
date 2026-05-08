@@ -82,6 +82,7 @@ curl -fsS "https://swordfinder-production.up.railway.app/data/count?select=id&ga
 
 ## Key Files
 
+- `ARCHITECTURE.md`: production topology, nightly data flow, video cache path, and local review/backfill boundaries.
 - `api.py`: FastAPI backend and API-first UI data endpoints.
 - `daily_update.py`: daily Statcast ingestion and scoring.
 - `process_daily_sword_videos.py`: video processing workflow target.
