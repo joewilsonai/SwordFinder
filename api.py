@@ -321,6 +321,7 @@ def build_xai_chat_payload(
                     "Do not invent scores, teams, injuries, stats, or video status. "
                     "Never describe the hitter as throwing the pitch; hitters swing against pitchers. "
                     "Do not write hitter possessives like 'Seager's changeup'; use pitcher possessives or 'against'. "
+                    "Do not imply the hitter succeeded, hit the ball well, or owned the pitch; a sword is a bad swing. "
                     "No markdown, no quote marks, no thread numbering."
                 ),
             },
@@ -362,6 +363,24 @@ def trim_x_post_text(text: str, limit: int = X_POST_CHAR_LIMIT) -> str:
     return normalized[: max(limit - 3, 0)].rstrip() + "..."
 
 
+def build_x_share_text(draft: str, page_url: str, limit: int = X_POST_CHAR_LIMIT) -> str:
+    """Append the selected slate URL while keeping the X composer text in bounds."""
+    cleaned_url = (page_url or "").strip()
+    cleaned_draft = re.sub(r"\s+", " ", draft or "").strip()
+    if not cleaned_url:
+        return trim_x_post_text(cleaned_draft, limit)
+
+    if cleaned_url in cleaned_draft:
+        return trim_x_post_text(cleaned_draft, limit)
+
+    separator = "\n\n"
+    remaining = limit - len(separator) - len(cleaned_url)
+    if remaining <= 0:
+        return trim_x_post_text(cleaned_url, limit)
+
+    return f"{trim_x_post_text(cleaned_draft, remaining)}{separator}{cleaned_url}"
+
+
 async def request_xai_post_draft(request: ShareDraftRequest, rows: list) -> dict:
     api_key = get_env("XAI_API_KEY")
     if not api_key:
@@ -385,14 +404,19 @@ async def request_xai_post_draft(request: ShareDraftRequest, rows: list) -> dict
     except (httpx.RequestError, ValueError) as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
+    page_url = build_x_post_page_url(request.date)
+    share_text = build_x_share_text(draft, page_url)
+
     return {
         "date": request.date,
         "draft": draft,
+        "share_text": share_text,
         "character_count": len(draft),
+        "share_character_count": len(share_text),
         "limit": X_POST_CHAR_LIMIT,
         "model": payload["model"],
         "source": "xai",
-        "page_url": build_x_post_page_url(request.date),
+        "page_url": page_url,
         "row_count": len(rows),
     }
 

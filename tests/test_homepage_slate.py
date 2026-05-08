@@ -12,7 +12,10 @@ def test_homepage_has_date_picker_for_daily_slate():
     assert "Biggest Miss" in html
     assert "Clips Ready" in html
     assert 'id="draft-x-post"' in html
+    assert "Share to X" in html
+    assert "Post on X" in html
     assert 'id="x-draft-panel"' in html
+    assert "Draft X Post" not in html
     assert "Season Swords" not in html
     assert "Slowest Bat Today" not in html
     assert "Top 5 Daily Swords" in html
@@ -38,6 +41,7 @@ def test_homepage_loads_selected_date_top_five_swords():
     assert "release_spin_rate" in source
     assert "perceived_velocity" in source
     assert "/share/x/draft" in source
+    assert "payload.share_text" in source
     assert "draftXPostButton" in source
     assert "copyXDraftButton" in source
     assert "fetchCount" not in source

@@ -31,6 +31,8 @@ const openXDraftButton = document.getElementById('open-x-draft');
 
 const season = latestSeasonRange();
 let currentSlateDate = null;
+let currentXPageUrl = '';
+let currentXShareText = '';
 
 function isCompleteDate(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''));
@@ -145,11 +147,26 @@ function updateHeroMetricsFromSlate(slate, selectedDate) {
   clipsReadyMetric.textContent = rows.length ? `${readyClips} / ${rows.length}` : '--';
 }
 
-function setXDraftControls(draft = '') {
-  const hasDraft = Boolean(draft.trim());
+function buildEditableShareText(draft = '') {
+  const trimmedDraft = draft.trim();
+  if (!currentXPageUrl) return trimmedDraft;
+  if (trimmedDraft.includes(currentXPageUrl)) return trimmedDraft;
+
+  const separator = '\n\n';
+  const remaining = 280 - separator.length - currentXPageUrl.length;
+  const boundedDraft = remaining > 0 && trimmedDraft.length > remaining
+    ? `${trimmedDraft.slice(0, Math.max(remaining - 3, 0)).trim()}...`
+    : trimmedDraft;
+
+  return `${boundedDraft}${separator}${currentXPageUrl}`.trim();
+}
+
+function setXDraftControls(draft = '', shareText = '') {
+  currentXShareText = shareText || buildEditableShareText(draft);
+  const hasDraft = Boolean(currentXShareText.trim());
   copyXDraftButton.disabled = !hasDraft;
   openXDraftButton.href = hasDraft
-    ? `https://x.com/intent/post?text=${encodeURIComponent(draft)}`
+    ? `https://x.com/intent/post?text=${encodeURIComponent(currentXShareText)}`
     : 'https://x.com/intent/post';
   openXDraftButton.classList.toggle('pointer-events-none', !hasDraft);
   openXDraftButton.classList.toggle('opacity-50', !hasDraft);
@@ -158,25 +175,29 @@ function setXDraftControls(draft = '') {
 function resetXDraftPanel() {
   xDraftPanel.classList.add('hidden');
   xDraftText.value = '';
+  currentXPageUrl = '';
+  currentXShareText = '';
   xDraftMeta.textContent = 'Ready for selected slate';
   xDraftStatus.textContent = '';
   setXDraftControls('');
 }
 
 function updateXDraftMeta(meta = {}) {
+  if (meta.page_url) currentXPageUrl = meta.page_url;
   const count = xDraftText.value.length;
   const limit = Number(meta.limit || xDraftText.maxLength || 280);
   const model = meta.model ? ` • ${meta.model}` : '';
-  xDraftMeta.textContent = `${count}/${limit} chars${model}`;
-  setXDraftControls(xDraftText.value);
+  const shareText = meta.share_text || buildEditableShareText(xDraftText.value);
+  xDraftMeta.textContent = `${count}/${limit} draft chars${model}`;
+  setXDraftControls(xDraftText.value, shareText);
 }
 
 async function copyXDraft() {
-  const draft = xDraftText.value.trim();
-  if (!draft) return;
+  const shareText = currentXShareText || buildEditableShareText(xDraftText.value);
+  if (!shareText) return;
 
   try {
-    await navigator.clipboard.writeText(draft);
+    await navigator.clipboard.writeText(shareText);
   } catch (_) {
     xDraftText.focus();
     xDraftText.select();
@@ -204,8 +225,9 @@ async function draftXPost() {
     });
 
     xDraftText.value = payload.draft || '';
-    updateXDraftMeta(payload);
-    xDraftStatus.textContent = payload.page_url || '';
+    const shareText = payload.share_text || '';
+    updateXDraftMeta({ ...payload, share_text: shareText });
+    xDraftStatus.textContent = 'Ready. Opens X composer as your signed-in account.';
   } catch (error) {
     console.error(error);
     xDraftMeta.textContent = 'Draft unavailable';

@@ -2,6 +2,7 @@ import pytest
 
 from api import (
     ShareDraftRequest,
+    build_x_share_text,
     build_x_post_page_url,
     build_x_post_prompt,
     build_xai_chat_payload,
@@ -74,6 +75,7 @@ def test_build_xai_chat_payload_uses_server_side_model_name():
     assert "under 260 characters" in payload["messages"][0]["content"]
     assert "Never describe the hitter as throwing the pitch" in payload["messages"][0]["content"]
     assert "Do not write hitter possessives like" in payload["messages"][0]["content"]
+    assert "Do not imply the hitter succeeded" in payload["messages"][0]["content"]
     assert "Corey Seager" in payload["messages"][1]["content"]
 
 
@@ -98,3 +100,14 @@ def test_trim_x_post_text_keeps_drafts_inside_x_limit():
 
     assert len(trimmed) == 280
     assert trimmed.endswith("...")
+
+
+def test_build_x_share_text_appends_selected_slate_url_inside_limit():
+    text = build_x_share_text(
+        "Corey Seager took the daily sword crown with a 105.3.",
+        "https://swordfinder.com/?date=2026-05-06",
+    )
+
+    assert "Corey Seager" in text
+    assert "https://swordfinder.com/?date=2026-05-06" in text
+    assert len(text) <= 280
