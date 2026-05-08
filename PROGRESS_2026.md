@@ -141,3 +141,17 @@
 ### Next Steps
 - Add recent GitHub workflow status to the ops page.
 - Build the daily sword slate page from the same backlog/status data.
+
+---
+
+## 2026-05-07 23:20 CDT
+
+### Homepage Daily Slate V1
+- Changed the homepage from a latest cached-video board into a date-selectable daily slate.
+- The homepage now lists the top 5 sword swings for the selected date, ranked 1 through 5.
+- Daily slate rows include cached-video and video-pending states.
+- The page supports `?date=YYYY-MM-DD` for a lightweight shareable selected date.
+
+### Next Steps
+- Add a clean `/date/:date` route that renders the same slate without a query string.
+- Add search for hitters and pitchers.

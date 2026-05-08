@@ -3,7 +3,7 @@
 Static frontend for SwordFinder using vanilla JavaScript + Tailwind CDN.
 
 ## Pages
-- `/index.html` - latest sword slate with autoplay-muted clips
+- `/index.html` - date-selectable top-5 daily sword slate
 - `/leaderboards.html` - weekly / monthly / season leaderboards
 - `/ops.html` - API health, video cache status, and pending clip queue
 - `/player/[id].html` - hitter sword profile

@@ -29,10 +29,17 @@
             <h1 class="brand-title mt-2 text-5xl leading-none text-zinc-100 md:text-7xl">Top Sword Swings</h1>
             <p id="hero-date" class="mt-3 text-lg text-zinc-300">Loading latest slate</p>
             <p class="mt-2 text-sm text-zinc-400">Autoplay is muted by default. Hover a clip to hear the crack and miss.</p>
+            <div class="mt-5 flex max-w-sm flex-col gap-2">
+              <label for="slate-date-input" class="text-xs uppercase tracking-[0.12em] text-zinc-500">Select Date</label>
+              <div class="flex gap-2">
+                <input id="slate-date-input" class="ops-date-input min-w-0 flex-1" type="date" />
+                <button id="slate-refresh" class="primary rounded-md px-4 py-2 text-xs uppercase tracking-[0.08em]">Load</button>
+              </div>
+            </div>
           </div>
           <div class="grid gap-3 xs:grid-cols-2 md:col-span-4 md:grid-cols-1">
             <div class="metric-tile p-3">
-              <p class="text-[11px] uppercase tracking-[0.08em] text-zinc-500">Latest Day Swords</p>
+              <p class="text-[11px] uppercase tracking-[0.08em] text-zinc-500">Selected Day Swords</p>
               <p id="metric-latest-count" class="text-2xl">--</p>
             </div>
             <div class="metric-tile p-3">
@@ -40,11 +47,11 @@
               <p id="metric-season-count" class="text-2xl">--</p>
             </div>
             <div class="metric-tile p-3">
-              <p class="text-[11px] uppercase tracking-[0.08em] text-zinc-500">Slowest Bat Speed</p>
+              <p class="text-[11px] uppercase tracking-[0.08em] text-zinc-500">Slowest Bat Today</p>
               <p id="metric-worst-speed" class="text-2xl">--</p>
             </div>
             <div class="metric-tile p-3">
-              <p class="text-[11px] uppercase tracking-[0.08em] text-zinc-500">Video Clips</p>
+              <p class="text-[11px] uppercase tracking-[0.08em] text-zinc-500">Selected Videos</p>
               <p id="metric-video-count" class="text-2xl">--</p>
             </div>
           </div>
@@ -53,11 +60,11 @@
 
       <section class="space-y-4">
         <div class="flex items-center justify-between gap-3">
-          <h2 class="brand-title text-3xl">Video Board</h2>
+          <h2 class="brand-title text-3xl">Top 5 Daily Swords</h2>
           <a href="/leaderboards.html" class="text-sm uppercase tracking-[0.08em] text-zinc-300 underline decoration-zinc-600 hover:decoration-[var(--accent-soft)]">Open full leaderboards</a>
         </div>
         <p id="status-text" class="text-sm text-zinc-400 loading-dots"></p>
-        <div id="sword-cards" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3"></div>
+        <div id="sword-cards" class="grid gap-4"></div>
         <div id="empty-state" class="hidden rounded-xl border border-dashed border-zinc-700 p-8 text-center text-zinc-400"></div>
       </section>
     </main>

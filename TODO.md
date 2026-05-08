@@ -13,7 +13,7 @@ Last updated: 2026-05-08
 ## Immediate Functional Priorities
 
 - Add a proper search flow for hitters and pitchers.
-- Add a date route/page for daily sword slates.
+- Add a clean `/date/:date` route for shareable daily sword slates; homepage now supports date selection with `?date=YYYY-MM-DD`.
 - Expand hitter profile stats beyond the current top-row list.
 - Expand pitcher profile stats for sword inducer rankings.
 - Expand the operations/status page with recent GitHub workflow status.
