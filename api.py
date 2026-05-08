@@ -310,7 +310,8 @@ def build_x_post_page_url(date: str) -> str:
 
 
 def build_top_sword_watch_url(date: str) -> str:
-    return f"{build_x_post_page_url(date)}#sword-1"
+    base_url = (get_env("PUBLIC_UI_BASE_URL") or get_env("UI_BASE_URL") or DEFAULT_UI_BASE_URL).rstrip("/")
+    return f"{base_url}/api/watch/top-sword?date={date}&rank=1"
 
 
 def build_top_sword_post_text(date: str, row: dict) -> str:

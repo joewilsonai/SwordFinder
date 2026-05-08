@@ -141,7 +141,7 @@ def test_build_top_sword_post_text_includes_video_stats_and_page_url():
     assert "bat 32.0 mph" in text
     assert "swing 6.0 ft" in text
     assert "miss 11.8 in" in text
-    assert "https://swordfinder.com/?date=2026-05-06#sword-1" in text
+    assert "https://swordfinder.com/api/watch/top-sword?date=2026-05-06&rank=1" in text
     assert len(text) <= 280
 
 
@@ -286,7 +286,7 @@ def test_top_sword_post_falls_back_to_link_when_media_upload_disabled(monkeypatc
     assert result["media_upload_enabled"] is False
     assert posted["access_token"] == "access-token"
     assert posted["media_id"] is None
-    assert "https://swordfinder.com/?date=2026-05-06#sword-1" in posted["text"]
+    assert "https://swordfinder.com/api/watch/top-sword?date=2026-05-06&rank=1" in posted["text"]
 
 
 def test_oauth2_video_upload_uses_v2_media_endpoints(monkeypatch):
