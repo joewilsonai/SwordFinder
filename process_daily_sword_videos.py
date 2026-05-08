@@ -6,6 +6,7 @@ Runs after the daily data update to download and upload videos
 
 import os
 import sys
+import argparse
 from datetime import datetime, timedelta
 import pandas as pd
 from supabase import create_client
@@ -25,10 +26,40 @@ logging.basicConfig(
     ]
 )
 
-def get_yesterdays_top_swords(supabase, date_str: str, top_n: int = 10):
-    """Get yesterday's top sword swings from the database"""
-    
-    # Query for yesterday's sword candidates
+
+def parse_bool(value: str) -> bool:
+    return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def parse_positive_int(value, default: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return parsed if parsed > 0 else default
+
+
+def select_video_backlog_rows(df: pd.DataFrame, top_n: int = 10, process_all: bool = False):
+    """Rank pending video rows and return either the top N or the full backlog."""
+    if df.empty:
+        return df
+
+    ranked = df.sort_values("sword_score", ascending=False)
+    if process_all:
+        return ranked
+    return ranked.head(min(top_n, len(ranked)))
+
+
+def get_yesterdays_top_swords(
+    supabase,
+    date_str: str,
+    top_n: int = 10,
+    process_all: bool = False,
+):
+    """Get pending regular-season sword video rows for a date."""
+
+    fetch_limit = 1000 if process_all else top_n * 2
+
     # Only get regular season games (game_type = 'R') as spring training has no videos
     result = supabase.table('mlb_pitches_enhanced')\
         .select('*')\
@@ -38,7 +69,7 @@ def get_yesterdays_top_swords(supabase, date_str: str, top_n: int = 10):
         .gt('sword_score', 0)\
         .is_('video_azure_blob_url', 'null')\
         .order('sword_score', desc=True)\
-        .limit(top_n * 2)\
+        .limit(fetch_limit)\
         .execute()
     
     if not result.data:
@@ -48,10 +79,7 @@ def get_yesterdays_top_swords(supabase, date_str: str, top_n: int = 10):
     df = pd.DataFrame(result.data)
     logging.info(f"Found {len(df)} sword candidates for {date_str}")
     
-    # Take top N by sword score
-    top_swords = df.nlargest(min(top_n, len(df)), 'sword_score')
-    
-    return top_swords
+    return select_video_backlog_rows(df, top_n=top_n, process_all=process_all)
 
 def process_videos_for_swords(df: pd.DataFrame, date_str: str):
     """Download and process videos for sword swings"""
@@ -135,20 +163,51 @@ def process_videos_for_swords(df: pd.DataFrame, date_str: str):
     
     return processed_count
 
-def main():
-    """Main execution"""
-    logging.info("Starting daily sword video processing...")
-    
-    # Get target date (defaults to yesterday). This keeps workflow behavior
-    # unchanged while allowing explicit no-games validation runs.
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(description="Process pending SwordFinder videos")
+    parser.add_argument(
+        "--date",
+        help="Date to process in YYYY-MM-DD format. Defaults to PROCESS_DATE_OVERRIDE or yesterday.",
+    )
+    parser.add_argument(
+        "--top-n",
+        type=int,
+        default=parse_positive_int(os.getenv("VIDEO_TOP_N"), 10),
+        help="Number of pending sword clips to process when not using --all.",
+    )
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        default=parse_bool(os.getenv("VIDEO_PROCESS_ALL", "false")),
+        help="Process the full pending video backlog for the date, capped by the Supabase read limit.",
+    )
+    return parser.parse_args(argv)
+
+
+def resolve_target_date(args):
+    if args.date:
+        return args.date
+
     date_override = os.getenv("PROCESS_DATE_OVERRIDE")
     if date_override:
-        date_str = date_override
-    else:
-        yesterday = datetime.now() - timedelta(days=1)
-        date_str = yesterday.strftime('%Y-%m-%d')
-    
-    logging.info(f"Processing videos for {date_str}")
+        return date_override
+
+    yesterday = datetime.now() - timedelta(days=1)
+    return yesterday.strftime('%Y-%m-%d')
+
+
+def main(argv=None):
+    """Main execution"""
+    args = parse_args(argv)
+    logging.info("Starting daily sword video processing...")
+    date_str = resolve_target_date(args)
+
+    logging.info(
+        "Processing videos for %s (top_n=%s, process_all=%s)",
+        date_str,
+        args.top_n,
+        args.all,
+    )
     
     # Load environment
     load_dotenv()
@@ -162,8 +221,13 @@ def main():
     
     supabase = create_client(supabase_url, supabase_key)
     
-    # Get top swords
-    top_swords = get_yesterdays_top_swords(supabase, date_str, top_n=10)
+    # Get pending video rows
+    top_swords = get_yesterdays_top_swords(
+        supabase,
+        date_str,
+        top_n=args.top_n,
+        process_all=args.all,
+    )
     
     if top_swords.empty:
         logging.info("No sword swings to process")
@@ -190,4 +254,4 @@ def main():
         logging.info(f"Total videos in database: {len(video_result.data)}")
 
 if __name__ == "__main__":
-    main() 
+    main()

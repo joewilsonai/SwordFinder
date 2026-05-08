@@ -101,6 +101,7 @@ sequenceDiagram
 - **Railway is the API boundary** for production browser reads. Direct Supabase reads in the UI are fallback-only.
 - **Vercel is static UI hosting.** It should not hold secrets or talk to Supabase with service-role credentials.
 - **GitHub Actions owns scheduled writes.** The daily update writes data; the video workflow writes video URLs; the smoke workflow only verifies production.
+- **The first video backlog is virtual.** A sword row with `sword_score > 0` and no `video_azure_blob_url` is treated as a pending video job. This avoids a new table while giving the app a real backlog surface.
 
 ## Video Resolution Details
 
@@ -115,6 +116,23 @@ The video processor uses this chain:
 7. Patch Supabase with `video_azure_blob_url`.
 
 The play-id resolver normalizes half-inning labels because the database stores values such as `Top` and `Bot`, while MLB feed values are `top` and `bottom`.
+
+## Video Backlog Controls
+
+The backlog is exposed through read-only API endpoints:
+
+- `GET /ops/video-backlog/status`
+- `GET /ops/video-backlog/status?date=YYYY-MM-DD`
+- `GET /ops/video-backlog?date=YYYY-MM-DD&limit=50`
+
+The video worker still defaults to a conservative top-10 daily run, but it can now drain larger slices on demand:
+
+```bash
+python process_daily_sword_videos.py --date 2026-05-03 --top-n 25
+python process_daily_sword_videos.py --date 2026-05-03 --all
+```
+
+The GitHub workflow keeps the default behavior. Manual/local runs can use `--date`, `--top-n`, `--all`, `VIDEO_TOP_N`, or `VIDEO_PROCESS_ALL=true`.
 
 ## Local Review / Backfill Path
 

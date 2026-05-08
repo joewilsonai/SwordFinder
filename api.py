@@ -52,6 +52,11 @@ if not supabase_url or not supabase_key:
 supabase = create_client(supabase_url, supabase_key)
 ALLOWED_TABLES = {"mlb_pitches_enhanced"}
 RESERVED_QUERY_KEYS = {"table", "select", "order", "limit", "offset"}
+VIDEO_BACKLOG_SELECT = (
+    "id,game_date,batter_name,pitcher_name,player_name,pitch_type,pitch_name,"
+    "description,events,bat_speed,swing_length,sword_score,"
+    "strike_zone_distance_inches,video_azure_blob_url,video_processed_at"
+)
 
 # Pydantic models
 class SwordSwing(BaseModel):
@@ -95,6 +100,39 @@ def normalize_sword_rows(rows: list) -> list:
     return [normalize_sword_row(row) for row in rows]
 
 
+def normalize_video_backlog_row(row: dict) -> dict:
+    """Present pending video rows from the hitter perspective."""
+    normalized = normalize_sword_row(row)
+    normalized["video_status"] = (
+        "cached" if normalized.get("video_azure_blob_url") else "pending"
+    )
+    return normalized
+
+
+def normalize_video_backlog_rows(rows: list) -> list:
+    return [normalize_video_backlog_row(row) for row in rows]
+
+
+def build_video_backlog_status(
+    date: Optional[str],
+    total_swords: int,
+    cached_videos: int,
+    pending_rows: list,
+) -> dict:
+    pending_videos = max(total_swords - cached_videos, 0)
+    cache_rate = round(cached_videos / total_swords, 4) if total_swords else 0.0
+
+    return {
+        "date": date,
+        "total_swords": total_swords,
+        "cached_videos": cached_videos,
+        "pending_videos": pending_videos,
+        "cache_rate": cache_rate,
+        "top_pending": normalize_video_backlog_rows(pending_rows),
+        "last_checked": datetime.utcnow().isoformat(),
+    }
+
+
 def _apply_filter(query, column: str, expression: str):
     parts = expression.split(".")
     op = parts[0]
@@ -133,6 +171,26 @@ def _apply_order(query, order_expr: str):
 def _validate_table(table: str):
     if table not in ALLOWED_TABLES:
         raise HTTPException(status_code=400, detail=f"Table not allowed: {table}")
+
+
+def _apply_video_backlog_base(query, date: Optional[str] = None):
+    query = query.gt('sword_score', 0)
+    if date:
+        query = query.eq('game_date', date)
+    return query
+
+
+def _count_video_backlog_rows(date: Optional[str] = None, cached: Optional[bool] = None) -> int:
+    query = supabase.table('mlb_pitches_enhanced').select('id', count='exact')
+    query = _apply_video_backlog_base(query, date)
+
+    if cached is True:
+        query = query.not_.is_('video_azure_blob_url', 'null')
+    elif cached is False:
+        query = query.is_('video_azure_blob_url', 'null')
+
+    result = query.limit(1).execute()
+    return result.count or 0
 
 
 @app.get("/data/rows")
@@ -190,6 +248,60 @@ async def get_count(
         return {"count": result.count or 0}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/ops/video-backlog")
+async def get_video_backlog(date: Optional[str] = None, limit: int = 50):
+    """List pending sword video cache rows."""
+    limit = max(1, min(limit, 200))
+
+    try:
+        query = supabase.table('mlb_pitches_enhanced')\
+            .select(VIDEO_BACKLOG_SELECT)
+        query = _apply_video_backlog_base(query, date)
+        result = query\
+            .is_('video_azure_blob_url', 'null')\
+            .order('sword_score', desc=True)\
+            .limit(limit)\
+            .execute()
+
+        return {
+            "date": date,
+            "limit": limit,
+            "count": len(result.data or []),
+            "pending": normalize_video_backlog_rows(result.data or []),
+            "last_checked": datetime.utcnow().isoformat(),
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/ops/video-backlog/status")
+async def get_video_backlog_status(date: Optional[str] = None, limit: int = 10):
+    """Summarize sword video cache coverage for all data or one date."""
+    limit = max(1, min(limit, 100))
+
+    try:
+        total_swords = _count_video_backlog_rows(date=date)
+        cached_videos = _count_video_backlog_rows(date=date, cached=True)
+
+        pending_query = supabase.table('mlb_pitches_enhanced')\
+            .select(VIDEO_BACKLOG_SELECT)
+        pending_query = _apply_video_backlog_base(pending_query, date)
+        pending_result = pending_query\
+            .is_('video_azure_blob_url', 'null')\
+            .order('sword_score', desc=True)\
+            .limit(limit)\
+            .execute()
+
+        return build_video_backlog_status(
+            date=date,
+            total_swords=total_swords,
+            cached_videos=cached_videos,
+            pending_rows=pending_result.data or [],
+        )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 

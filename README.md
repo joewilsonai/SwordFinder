@@ -15,6 +15,8 @@ The browser reads through the Railway API by default:
 - `GET /data/rows`
 - `GET /data/count`
 - `GET /swords/recent`
+- `GET /ops/video-backlog/status`
+- `GET /ops/video-backlog`
 
 Direct browser reads from Supabase are only a fallback when `apiBaseUrl` is unset in `ui/assets/config.js`.
 
@@ -78,6 +80,15 @@ PYTHONPATH=. .venv/bin/pytest tests/test_api_sword_serialization.py tests/test_u
 python test_workflow_imports.py
 curl -fsS https://swordfinder-production.up.railway.app/health
 curl -fsS "https://swordfinder-production.up.railway.app/data/count?select=id&game_date=gte.2026-01-01&sword_score=gt.0"
+curl -fsS "https://swordfinder-production.up.railway.app/ops/video-backlog/status?date=2026-05-03"
+```
+
+Manual video backlog runs:
+
+```bash
+source ~/.luna/secrets/keys.env
+python process_daily_sword_videos.py --date 2026-05-03 --top-n 25
+python process_daily_sword_videos.py --date 2026-05-03 --all
 ```
 
 ## Key Files

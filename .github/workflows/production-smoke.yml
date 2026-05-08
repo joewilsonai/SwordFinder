@@ -32,6 +32,9 @@ jobs:
           curl -fsS "$API_BASE/swords/recent?limit=1" | tee recent.json
           grep -q '"sword_score"' recent.json
 
+          curl -fsS "$API_BASE/ops/video-backlog/status?date=2026-05-03&limit=1" | tee video-backlog.json
+          grep -q '"pending_videos"' video-backlog.json
+
           for route in / /leaderboards /player/608369 /pitcher/660787 /assets/index.js /assets/supabase-rest.js; do
             curl -fsS -o /dev/null "$UI_BASE$route"
           done
