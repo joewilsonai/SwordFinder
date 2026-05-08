@@ -309,6 +309,10 @@ def build_x_post_page_url(date: str) -> str:
     return f"{base_url}/?date={date}"
 
 
+def build_top_sword_watch_url(date: str) -> str:
+    return f"{build_x_post_page_url(date)}#sword-1"
+
+
 def build_top_sword_post_text(date: str, row: dict) -> str:
     """Build the default native-video X caption for the top sword of a day."""
     normalized = normalize_sword_row(row)
@@ -320,7 +324,7 @@ def build_top_sword_post_text(date: str, row: dict) -> str:
     bat_speed = format_stat(normalized.get("bat_speed"))
     swing_length = format_stat(normalized.get("swing_length"))
     miss = format_stat(normalized.get("strike_zone_distance_inches"))
-    page_url = build_x_post_page_url(date)
+    page_url = build_top_sword_watch_url(date)
 
     body = (
         f"Sword of the Day: {hitter} vs {pitcher}. "
@@ -1106,6 +1110,26 @@ async def upload_and_post_top_sword_video(text: str, video_url: str, session: Op
     return {**result, "media": media}
 
 
+async def post_top_sword_link(text: str, request: Request) -> dict:
+    """Post the #1 sword text with a SwordFinder watch link when native media is unavailable."""
+    if x_oauth2_is_configured():
+        access_token = await get_x_oauth2_user_token()
+        try:
+            result = await create_x_post_oauth2(text, access_token)
+        except HTTPException as exc:
+            if exc.status_code != 401 or not x_oauth2_refresh_token():
+                raise
+            access_token = await get_x_oauth2_user_token(force_refresh=True)
+            result = await create_x_post_oauth2(text, access_token)
+        return {**result, "auth_mode": "oauth2_user_token", "post_mode": "link"}
+
+    session = get_x_session(request)
+    if not session:
+        raise HTTPException(status_code=401, detail="Connect X before posting")
+    result = await create_x_post(text, session)
+    return {**result, "post_mode": "link"}
+
+
 async def request_xai_post_draft(request: ShareDraftRequest, rows: list) -> dict:
     api_key = get_env("XAI_API_KEY")
     if not api_key:
@@ -1707,12 +1731,18 @@ async def post_top_sword_to_x(request: Request, post: TopSwordPostRequest):
         "hydrated": hydrated,
         "top_sword": top_row,
         "media_upload_enabled": x_media_upload_enabled(),
+        "post_mode": "video" if x_media_upload_enabled() else "link",
     }
     if post.dry_run:
         return preview
 
     if not x_media_upload_enabled():
-        raise HTTPException(status_code=503, detail="X video posting requires an OAuth2 token with media.write.")
+        result = await post_top_sword_link(text, request)
+        return {
+            **preview,
+            **result,
+            "screen_name": x_screen_name() or result.get("screen_name"),
+        }
 
     session = get_x_session(request)
     result = await upload_and_post_top_sword_video(text, top_row["video_azure_blob_url"], session)

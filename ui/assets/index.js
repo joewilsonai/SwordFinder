@@ -113,7 +113,7 @@ function cardTemplate(row, idx) {
   const pitchName = row.pitch_name || row.pitch_type || 'Pitch';
 
   return `
-    <article class="sword-card card overflow-hidden p-3 md:p-4" style="animation-delay:${idx * 80}ms">
+    <article id="sword-${idx + 1}" class="sword-card card overflow-hidden p-3 md:p-4" style="animation-delay:${idx * 80}ms">
       <div class="mb-3 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div class="flex items-center gap-3">
           <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-md border border-zinc-700 bg-black/60 text-xl font-semibold text-[var(--accent-soft)]">${idx + 1}</span>
@@ -194,8 +194,11 @@ function setXDraftControls(draft = '', shareText = '') {
   const hasDraft = Boolean(currentXShareText.trim());
   copyXDraftButton.disabled = !hasDraft;
   postXNowButton.disabled = !hasDraft || !isXConnected;
-  postTopSwordVideoButton.disabled = !isXConnected || !currentSlateDate || !xMediaUploadEnabled;
-  postTopSwordVideoButton.title = xMediaUploadEnabled ? '' : 'X video posting needs media.write on the configured OAuth2 token.';
+  postTopSwordVideoButton.disabled = !isXConnected || !currentSlateDate;
+  postTopSwordVideoButton.textContent = xMediaUploadEnabled ? 'Post #1 Video' : 'Post #1 Link';
+  postTopSwordVideoButton.title = xMediaUploadEnabled
+    ? 'Post the #1 sword with native X video.'
+    : 'Post the #1 sword with a SwordFinder watch link.';
   openXDraftButton.href = hasDraft
     ? `https://x.com/intent/post?text=${encodeURIComponent(currentXShareText)}`
     : 'https://x.com/intent/post';
@@ -227,8 +230,11 @@ function renderXConnectionStatus() {
     : 'Connect X';
   connectXButton.disabled = isXConnected;
   postXNowButton.disabled = !isXConnected || !currentXShareText;
-  postTopSwordVideoButton.disabled = !isXConnected || !currentSlateDate || !xMediaUploadEnabled;
-  postTopSwordVideoButton.title = xMediaUploadEnabled ? '' : 'X video posting needs media.write on the configured OAuth2 token.';
+  postTopSwordVideoButton.disabled = !isXConnected || !currentSlateDate;
+  postTopSwordVideoButton.textContent = xMediaUploadEnabled ? 'Post #1 Video' : 'Post #1 Link';
+  postTopSwordVideoButton.title = xMediaUploadEnabled
+    ? 'Post the #1 sword with native X video.'
+    : 'Post the #1 sword with a SwordFinder watch link.';
 }
 
 function updateXDraftMeta(meta = {}) {
@@ -384,7 +390,8 @@ async function postTopSwordVideo() {
 
   postTopSwordVideoButton.disabled = true;
   xDraftPanel.classList.remove('hidden');
-  xDraftStatus.textContent = 'Posting #1 sword video with stats...';
+  const postKind = xMediaUploadEnabled ? 'video' : 'link';
+  xDraftStatus.textContent = `Posting #1 sword ${postKind} with stats...`;
 
   try {
     const payload = await fetchApiJson('/share/x/top-sword', {}, {
@@ -398,7 +405,9 @@ async function postTopSwordVideo() {
       updateXDraftMeta({ share_text: payload.text, limit: 280 });
     }
     const postUrl = payload.url || `https://x.com/${payload.screen_name || 'i'}/status/${payload.id}`;
-    xDraftStatus.innerHTML = `Posted #1 video as @${escapeHtml(payload.screen_name || xScreenName || 'connected account')}: <a class="underline decoration-zinc-500 hover:decoration-[var(--accent-soft)]" href="${escapeHtml(postUrl)}" target="_blank" rel="noreferrer">view on X</a>`;
+    const postedKind = payload.post_mode || (payload.media ? 'video' : 'link');
+    const postedPrefix = postedKind === 'link' ? 'Posted #1 link' : 'Posted #1 video';
+    xDraftStatus.innerHTML = `${postedPrefix} as @${escapeHtml(payload.screen_name || xScreenName || 'connected account')}: <a class="underline decoration-zinc-500 hover:decoration-[var(--accent-soft)]" href="${escapeHtml(postUrl)}" target="_blank" rel="noreferrer">view on X</a>`;
   } catch (error) {
     console.error(error);
     xDraftStatus.textContent = error.message;

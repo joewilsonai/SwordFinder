@@ -5,6 +5,7 @@ import pytest
 import api
 from api import (
     ShareDraftRequest,
+    TopSwordPostRequest,
     build_oauth1_authorization_header,
     build_top_sword_post_text,
     build_x_share_text,
@@ -140,7 +141,7 @@ def test_build_top_sword_post_text_includes_video_stats_and_page_url():
     assert "bat 32.0 mph" in text
     assert "swing 6.0 ft" in text
     assert "miss 11.8 in" in text
-    assert "https://swordfinder.com/?date=2026-05-06" in text
+    assert "https://swordfinder.com/?date=2026-05-06#sword-1" in text
     assert len(text) <= 280
 
 
@@ -248,6 +249,44 @@ def test_x_draft_endpoint_is_disabled_without_oauth2_token(monkeypatch):
 
     assert exc.value.status_code == 503
     assert "OAuth2 token" in exc.value.detail
+
+
+def test_top_sword_post_falls_back_to_link_when_media_upload_disabled(monkeypatch):
+    env = {
+        "X_OAUTH2_ACCESS_TOKEN": "access-token",
+        "X_SCREEN_NAME": "joewilsonai",
+        "X_MEDIA_UPLOAD_ENABLED": "false",
+    }
+    posted = {}
+
+    class Request:
+        cookies = {}
+
+    async def fake_create_x_post_oauth2(text, access_token, media_id=None):
+        posted["text"] = text
+        posted["access_token"] = access_token
+        posted["media_id"] = media_id
+        return {
+            "posted": True,
+            "id": "post-123",
+            "text": text,
+            "url": "https://x.com/joewilsonai/status/post-123",
+            "media_id": media_id,
+        }
+
+    monkeypatch.setattr(api, "get_env", lambda name, default=None: env.get(name, default))
+    monkeypatch.setattr(api, "fetch_daily_slate_rows", lambda date, limit: [SAMPLE_ROWS[0]])
+    monkeypatch.setattr(api, "create_x_post_oauth2", fake_create_x_post_oauth2)
+    monkeypatch.setattr(api, "upload_and_post_top_sword_video", lambda *args, **kwargs: pytest.fail("native upload should not run"))
+
+    result = asyncio.run(api.post_top_sword_to_x(Request(), TopSwordPostRequest(date="2026-05-06")))
+
+    assert result["posted"] is True
+    assert result["post_mode"] == "link"
+    assert result["media_upload_enabled"] is False
+    assert posted["access_token"] == "access-token"
+    assert posted["media_id"] is None
+    assert "https://swordfinder.com/?date=2026-05-06#sword-1" in posted["text"]
 
 
 def test_oauth2_video_upload_uses_v2_media_endpoints(monkeypatch):

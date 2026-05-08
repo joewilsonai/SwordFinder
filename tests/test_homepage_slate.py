@@ -57,6 +57,8 @@ def test_homepage_loads_selected_date_top_five_swords():
     assert "xSharingEnabled" in source
     assert "xMediaUploadEnabled" in source
     assert "media_upload_enabled" in source
+    assert "Post #1 Link" in source
+    assert "Posted #1 link" in source
     assert "if (xSharingEnabled)" in source
     assert "/share/x/draft" in source
     assert "/share/x/oauth/status" in source
