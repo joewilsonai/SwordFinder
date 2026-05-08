@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SwordFinder | Ops</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/assets/styles.css" />
+  </head>
+  <body>
+    <header id="top-nav" class="sticky top-0 z-50 border-b border-zinc-800/80 bg-black/70 backdrop-blur"></header>
+
+    <main class="mx-auto flex w-full max-w-6xl flex-col gap-7 px-4 pb-12 pt-6 md:px-6 md:pt-10">
+      <section class="grid gap-4 lg:grid-cols-[1.4fr_0.6fr]">
+        <div class="card hero-glow p-5 md:p-7">
+          <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div>
+              <p class="text-xs uppercase tracking-[0.14em] text-zinc-400">Operations</p>
+              <h1 class="brand-title mt-2 text-5xl leading-none md:text-6xl">Sword Room</h1>
+              <p id="ops-date-label" class="mt-3 text-sm text-zinc-300">Loading latest slate</p>
+            </div>
+            <div class="flex w-full flex-col gap-2 sm:w-auto sm:min-w-[220px]">
+              <label for="ops-date-input" class="text-xs uppercase tracking-[0.12em] text-zinc-500">Slate Date</label>
+              <div class="flex gap-2">
+                <input id="ops-date-input" class="ops-date-input min-w-0 flex-1" type="date" />
+                <button id="ops-refresh" class="primary rounded-md px-4 py-2 text-xs uppercase tracking-[0.08em]">Refresh</button>
+              </div>
+            </div>
+          </div>
+          <p id="status-text" class="mt-5 text-sm text-zinc-400 loading-dots">Loading operations data</p>
+        </div>
+
+        <aside class="card p-5">
+          <div class="flex items-center justify-between gap-3">
+            <p class="text-xs uppercase tracking-[0.14em] text-zinc-400">API Health</p>
+            <span id="ops-health-pill" class="status-pill">Checking</span>
+          </div>
+          <p id="ops-health-detail" class="mt-4 text-2xl font-semibold">Railway API</p>
+          <p id="ops-last-checked" class="mt-2 text-sm text-zinc-400">--</p>
+        </aside>
+      </section>
+
+      <section>
+        <div id="ops-metrics" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"></div>
+      </section>
+
+      <section class="grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
+        <article class="card p-5">
+          <p class="text-xs uppercase tracking-[0.14em] text-zinc-400">Season Cache</p>
+          <div id="season-metrics" class="mt-4 grid gap-3"></div>
+          <div class="mt-5 border-t border-zinc-800 pt-4">
+            <p class="text-xs uppercase tracking-[0.12em] text-zinc-500">Backlog Drain</p>
+            <code id="ops-command" class="mt-2 block rounded-md border border-zinc-800 bg-black/50 p-3 text-xs text-zinc-300"></code>
+          </div>
+        </article>
+
+        <article class="card overflow-hidden p-5">
+          <div class="flex items-center justify-between gap-3">
+            <div>
+              <p class="text-xs uppercase tracking-[0.14em] text-zinc-400">Top Pending Clips</p>
+              <h2 class="brand-title mt-1 text-3xl">Missing Video Queue</h2>
+            </div>
+            <span id="pending-count-pill" class="badge bg-zinc-950/80">--</span>
+          </div>
+          <div id="pending-list" class="mt-4 divide-y divide-zinc-800"></div>
+          <div id="pending-empty" class="mt-4 hidden rounded-md border border-zinc-800 bg-black/30 p-4 text-sm text-zinc-400">
+            No pending clips for this slate.
+          </div>
+        </article>
+      </section>
+    </main>
+
+    <footer id="app-footer" class="border-t border-zinc-800/80"></footer>
+
+    <script src="/assets/config.js"></script>
+    <script type="module" src="/assets/ops.js"></script>
+  </body>
+</html>

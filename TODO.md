@@ -1,6 +1,6 @@
 # SwordFinder TODO
 
-Last updated: 2026-05-07
+Last updated: 2026-05-08
 
 ## Current Baseline
 
@@ -16,7 +16,7 @@ Last updated: 2026-05-07
 - Add a date route/page for daily sword slates.
 - Expand hitter profile stats beyond the current top-row list.
 - Expand pitcher profile stats for sword inducer rankings.
-- Add a small operations/status page for latest data date, video backlog, and recent workflow status.
+- Expand the operations/status page with recent GitHub workflow status.
 
 ## Cleanup/Hygiene Priorities
 

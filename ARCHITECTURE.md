@@ -100,6 +100,7 @@ sequenceDiagram
 - **Azure is only the clip cache.** Missing `video_azure_blob_url` does not mean MLB has no video; it means SwordFinder has not cached that clip yet or a resolver/upload step failed.
 - **Railway is the API boundary** for production browser reads. Direct Supabase reads in the UI are fallback-only.
 - **Vercel is static UI hosting.** It should not hold secrets or talk to Supabase with service-role credentials.
+- **The Ops UI is read-only.** It reads Railway health, video backlog status, and season counts; it does not trigger video processing yet.
 - **GitHub Actions owns scheduled writes.** The daily update writes data; the video workflow writes video URLs; the smoke workflow only verifies production.
 - **The first video backlog is virtual.** A sword row with `sword_score > 0` and no `video_azure_blob_url` is treated as a pending video job. This avoids a new table while giving the app a real backlog surface.
 

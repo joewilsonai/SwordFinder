@@ -124,3 +124,20 @@
 ### Next Steps
 - Commit the stabilization slice.
 - Start the next functionality pass from a clean repo state.
+
+---
+
+## 2026-05-07 22:35 CDT
+
+### Ops Visibility Pass
+- Added a static operations page at `/ops` / `/ops.html`.
+- Added UI access to Railway health and video backlog endpoints.
+- Added latest-slate cache metrics, season cache counts, and a top pending clip queue.
+- Added a date picker so any slate date can be inspected on demand.
+- Added the ops route and asset to production smoke checks.
+- Deployed the static UI to Vercel production alias:
+  - `https://ui-one-henna.vercel.app/ops`
+
+### Next Steps
+- Add recent GitHub workflow status to the ops page.
+- Build the daily sword slate page from the same backlog/status data.

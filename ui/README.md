@@ -5,6 +5,7 @@ Static frontend for SwordFinder using vanilla JavaScript + Tailwind CDN.
 ## Pages
 - `/index.html` - latest sword slate with autoplay-muted clips
 - `/leaderboards.html` - weekly / monthly / season leaderboards
+- `/ops.html` - API health, video cache status, and pending clip queue
 - `/player/[id].html` - hitter sword profile
 - `/pitcher/[id].html` - pitcher sword-inducer profile
 
@@ -16,6 +17,7 @@ python3 -m http.server 3000
 2. Open:
 - http://localhost:3000/index.html
 - http://localhost:3000/leaderboards.html
+- http://localhost:3000/ops.html
 - http://localhost:3000/player/[id].html?id=571970
 - http://localhost:3000/pitcher/[id].html?id=592332
 

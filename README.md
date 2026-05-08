@@ -5,6 +5,7 @@ SwordFinder finds "sword" swings in MLB Statcast data: two-strike swinging strik
 ## Current Production Shape
 
 - Static UI: `https://ui-one-henna.vercel.app`
+- Ops UI: `https://ui-one-henna.vercel.app/ops`
 - FastAPI backend: `https://swordfinder-production.up.railway.app`
 - Database: Supabase table `mlb_pitches_enhanced`
 - Video storage: Azure Blob container `swordfinder-videos`
@@ -17,6 +18,8 @@ The browser reads through the Railway API by default:
 - `GET /swords/recent`
 - `GET /ops/video-backlog/status`
 - `GET /ops/video-backlog`
+
+The static ops page reads those endpoints to show API health, latest slate video cache status, season cache counts, and the top pending clips.
 
 Direct browser reads from Supabase are only a fallback when `apiBaseUrl` is unset in `ui/assets/config.js`.
 
