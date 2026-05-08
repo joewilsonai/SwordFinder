@@ -3,6 +3,7 @@ import {
   fetchCount,
   fetchOpsJson,
   fetchRows,
+  formatApiTimestamp,
   formatCompact,
   formatDate,
   latestSeasonRange,
@@ -30,18 +31,6 @@ const season = latestSeasonRange();
 function percent(value) {
   const number = Number(value || 0) * 100;
   return `${number.toFixed(number >= 10 ? 0 : 1)}%`;
-}
-
-function formatTimestamp(value) {
-  if (!value) return '--';
-  const dt = new Date(value);
-  if (Number.isNaN(dt.getTime())) return value;
-  return dt.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
 }
 
 function metricTile(label, value, detail = '') {
@@ -72,7 +61,7 @@ function renderHealth(health) {
   healthPill.classList.toggle('is-good', connected);
   healthPill.classList.toggle('is-bad', !connected);
   healthDetail.textContent = connected ? 'Database connected' : 'API issue detected';
-  lastChecked.textContent = `Checked ${formatTimestamp(health?.timestamp)}`;
+  lastChecked.textContent = `Checked ${formatApiTimestamp(health?.timestamp)}`;
 }
 
 function renderSlate(status) {

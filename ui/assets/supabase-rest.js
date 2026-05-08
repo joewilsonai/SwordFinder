@@ -147,6 +147,24 @@ export function formatDate(value) {
   });
 }
 
+export function formatApiTimestamp(value) {
+  if (!value) return '--';
+
+  const raw = String(value);
+  const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw);
+  const looksLikeIsoDateTime = /^\d{4}-\d{2}-\d{2}T/.test(raw);
+  const normalized = looksLikeIsoDateTime && !hasTimezone ? `${raw}Z` : raw;
+  const dt = new Date(normalized);
+
+  if (Number.isNaN(dt.getTime())) return value;
+  return dt.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
 export function formatCompact(value) {
   if (value === null || value === undefined || Number.isNaN(Number(value))) {
     return '--';

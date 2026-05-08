@@ -69,4 +69,5 @@ def test_build_video_backlog_status_calculates_counts_and_ratio():
     assert status["cached_videos"] == 9
     assert status["pending_videos"] == 3
     assert status["cache_rate"] == 0.75
+    assert status["last_checked"].endswith("Z")
     assert status["top_pending"][0]["player_name"] == "Jonny DeLuca"

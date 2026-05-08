@@ -7,7 +7,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 from supabase import create_client
 from dotenv import load_dotenv
@@ -57,6 +57,10 @@ VIDEO_BACKLOG_SELECT = (
     "description,events,bat_speed,swing_length,sword_score,"
     "strike_zone_distance_inches,video_azure_blob_url,video_processed_at"
 )
+
+
+def utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 # Pydantic models
 class SwordSwing(BaseModel):
@@ -129,7 +133,7 @@ def build_video_backlog_status(
         "pending_videos": pending_videos,
         "cache_rate": cache_rate,
         "top_pending": normalize_video_backlog_rows(pending_rows),
-        "last_checked": datetime.utcnow().isoformat(),
+        "last_checked": utc_now_iso(),
     }
 
 
@@ -272,7 +276,7 @@ async def get_video_backlog(date: Optional[str] = None, limit: int = 50):
             "limit": limit,
             "count": len(result.data or []),
             "pending": normalize_video_backlog_rows(result.data or []),
-            "last_checked": datetime.utcnow().isoformat(),
+            "last_checked": utc_now_iso(),
         }
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
@@ -320,7 +324,7 @@ async def health_check():
         "status": "healthy",
         "database": db_status,
         "project": "Swordfinder (seagurfpitfslyxxxztw)",
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": utc_now_iso()
     }
 
 @app.get("/swords/recent", response_model=List[SwordSwing])
@@ -412,7 +416,7 @@ async def get_stats_overview():
             "total_pitches": total_result.count,
             "total_swords": swords_result.count,
             "total_videos": videos_result.count,
-            "last_updated": datetime.utcnow().isoformat()
+            "last_updated": utc_now_iso()
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
