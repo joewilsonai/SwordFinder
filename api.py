@@ -471,7 +471,7 @@ def _validate_table(table: str):
 
 
 def _apply_video_backlog_base(query, date: Optional[str] = None):
-    query = query.gte('sword_score', MIN_PUBLIC_SWORD_SCORE)
+    query = query.eq('game_type', 'R').gte('sword_score', MIN_PUBLIC_SWORD_SCORE)
     if date:
         query = query.eq('game_date', date)
     return query
@@ -514,6 +514,7 @@ def fetch_profile_sword_rows(
     result = supabase.table('mlb_pitches_enhanced')\
         .select('*')\
         .eq(filter_column, entity_id)\
+        .eq('game_type', 'R')\
         .gte('game_date', start_date)\
         .lt('game_date', end_date)\
         .gte('sword_score', MIN_PUBLIC_SWORD_SCORE)\
@@ -844,6 +845,7 @@ async def get_recent_swords(limit: int = 10):
     try:
         result = supabase.table('mlb_pitches_enhanced')\
             .select('*')\
+            .eq('game_type', 'R')\
             .gte('sword_score', MIN_PUBLIC_SWORD_SCORE)\
             .not_.is_('video_azure_blob_url', 'null')\
             .order('game_date', desc=True)\
@@ -862,6 +864,7 @@ async def get_top_swords_by_date(date: str, limit: int = 10):
         result = supabase.table('mlb_pitches_enhanced')\
             .select('*')\
             .eq('game_date', date)\
+            .eq('game_type', 'R')\
             .gte('sword_score', MIN_PUBLIC_SWORD_SCORE)\
             .order('sword_score', desc=True)\
             .limit(limit)\
@@ -893,6 +896,7 @@ async def get_player_swords(player_name: str, limit: int = 50):
         result = supabase.table('mlb_pitches_enhanced')\
             .select('*')\
             .eq('batter_name', player_name)\
+            .eq('game_type', 'R')\
             .gte('sword_score', MIN_PUBLIC_SWORD_SCORE)\
             .order('sword_score', desc=True)\
             .limit(limit)\
@@ -914,12 +918,14 @@ async def get_stats_overview():
         # Total swords
         swords_result = supabase.table('mlb_pitches_enhanced')\
             .select('id', count='exact')\
+            .eq('game_type', 'R')\
             .gte('sword_score', MIN_PUBLIC_SWORD_SCORE)\
             .execute()
         
         # Total with videos
         videos_result = supabase.table('mlb_pitches_enhanced')\
             .select('id', count='exact')\
+            .eq('game_type', 'R')\
             .gte('sword_score', MIN_PUBLIC_SWORD_SCORE)\
             .not_.is_('video_azure_blob_url', 'null')\
             .execute()
@@ -940,6 +946,7 @@ async def search_players(q: str, limit: int = 10):
         result = supabase.table('mlb_pitches_enhanced')\
             .select('batter_name')\
             .ilike('batter_name', f'%{q}%')\
+            .eq('game_type', 'R')\
             .gte('sword_score', MIN_PUBLIC_SWORD_SCORE)\
             .limit(1000)\
             .execute()

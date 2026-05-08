@@ -126,6 +126,7 @@ function renderPitcherTable(rows) {
 async function fetchLatestDate() {
   const rows = await fetchRows('mlb_pitches_enhanced', {
     select: 'game_date',
+    game_type: 'eq.R',
     sword_score: 'gte.90',
     game_date: [`gte.${season.startDate}`, `lt.${season.endDate}`],
     order: 'game_date.desc',
@@ -146,6 +147,7 @@ async function refresh() {
   const start = rangeStart();
   const rows = await fetchRows('mlb_pitches_enhanced', {
     select: 'id,batter,pitcher,player_name,pitcher_name,batter_name,sword_score,game_date,pitch_type,release_speed',
+    game_type: 'eq.R',
     sword_score: 'gte.90',
     game_date: [`gte.${start}`, `lte.${latestDate}`],
     order: 'sword_score.desc',

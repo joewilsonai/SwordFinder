@@ -18,6 +18,7 @@ def test_public_ui_filters_out_sub_ninety_scores():
 
     for source in sources:
         assert "sword_score: 'gte.90'" in source
+        assert "game_type: 'eq.R'" in source
         assert "sword_score: 'gt.0'" not in source
 
 

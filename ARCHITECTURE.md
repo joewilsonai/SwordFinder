@@ -107,7 +107,7 @@ sequenceDiagram
 - **The Ops UI is read-only.** It reads Railway health, video backlog status, and season counts; it does not trigger video processing yet.
 - **GitHub Actions owns scheduled writes.** The daily update writes data; the video workflow writes video URLs; the smoke workflow only verifies production.
 - **The first video backlog is virtual.** A public sword row with `sword_score >= 90.0` and no `video_azure_blob_url` is treated as a pending video job. This avoids a new table while giving the app a real backlog surface.
-- **Public sword surfaces are 90+.** Lower-scored rows can remain in Supabase for analysis, but home, leaderboards, profiles, ops counts, and video workers should all use the 90-point public floor.
+- **Public sword surfaces are 90+ regular season.** Lower-scored and non-regular-season rows can remain in Supabase for analysis, but home, leaderboards, profiles, ops counts, and video workers should all use `game_type = R` plus the 90-point public floor.
 - **On-load hydration is capped.** The homepage hydrates only the selected top five; profile pages hydrate visible missing profile clips up to `PROFILE_VIDEO_HYDRATION_MAX` so a profile view cannot drain a whole season by accident.
 
 ## Video Resolution Details

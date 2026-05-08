@@ -39,6 +39,7 @@ def process_videos_for_date(date_str, supabase, video_processor, n_videos=5):
     result = supabase.table('mlb_pitches_enhanced')\
         .select('*')\
         .eq('game_date', date_str)\
+        .eq('game_type', 'R')\
         .gte('sword_score', MIN_VIDEO_SWORD_SCORE)\
         .order('sword_score', desc=True)\
         .limit(20)\

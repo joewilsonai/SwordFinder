@@ -82,7 +82,7 @@ Direct browser reads from Supabase are fallback-only when `apiBaseUrl` is unset 
 
 Missing `video_azure_blob_url` means SwordFinder has not cached the MLB clip yet, not necessarily that the clip does not exist.
 
-Public SwordFinder surfaces use a hard sword floor of `sword_score >= 90.0`. Rows below 90 can stay in Supabase for analysis, but they should not appear in the public UI, leaderboards, profile histories, ops counts, or video backlog.
+Public SwordFinder surfaces use a hard regular-season sword floor of `game_type = R` and `sword_score >= 90.0`. Rows below 90 and non-regular-season rows can stay in Supabase for analysis, but they should not appear in the public UI, leaderboards, profile histories, ops counts, or video backlog.
 
 The main video paths are:
 
