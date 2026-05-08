@@ -41,6 +41,28 @@ function numericValue(value) {
   return Number.isFinite(number) ? number : null;
 }
 
+function formatDecimal(value, decimals = 1) {
+  const number = numericValue(value);
+  return number !== null ? number.toFixed(decimals) : '--';
+}
+
+function formatInteger(value) {
+  const number = numericValue(value);
+  return number !== null ? Math.round(number).toLocaleString('en-US') : '--';
+}
+
+function metricTile(label, value, unit = '') {
+  const safeValue = escapeHtml(value);
+  const safeUnit = escapeHtml(unit);
+
+  return `
+    <div class="stat-tile">
+      <p class="text-[11px] uppercase tracking-[0.08em] text-zinc-500">${escapeHtml(label)}</p>
+      <p class="stat-value">${safeValue}${safeUnit ? ` <span class="text-xs text-zinc-400">${safeUnit}</span>` : ''}</p>
+    </div>
+  `;
+}
+
 async function getLatestSwordDate() {
   const rows = await fetchRows('mlb_pitches_enhanced', {
     select: 'game_date',
@@ -59,6 +81,7 @@ function cardTemplate(row, idx) {
   const video = row.video_azure_blob_url;
   const score = Number(row.sword_score || 0).toFixed(1);
   const videoBadge = video ? 'Video ready' : 'Video pending';
+  const pitchName = row.pitch_name || row.pitch_type || 'Pitch';
 
   return `
     <article class="sword-card card overflow-hidden p-3 md:p-4" style="animation-delay:${idx * 80}ms">
@@ -77,7 +100,7 @@ function cardTemplate(row, idx) {
       </div>
       <p class="mb-3 text-sm text-zinc-300">
         vs <a class="underline decoration-zinc-500 hover:decoration-[var(--accent-soft)]" href="${pitcherLink}">${escapeHtml(row.pitcher_name || row.player_name || 'Unknown pitcher')}</a>
-        • ${escapeHtml(row.pitch_name || row.pitch_type || 'Pitch')} ${row.release_speed ? Number(row.release_speed).toFixed(1) : '--'} mph
+        • ${escapeHtml(pitchName)} ${formatDecimal(row.release_speed)} mph
         • ${escapeHtml(row.description || row.events || 'swinging strike')}
       </p>
       <div class="video-shell mb-3">
@@ -87,19 +110,20 @@ function cardTemplate(row, idx) {
           </video>
         ` : `<div class="video-placeholder text-sm text-zinc-500">Video not yet available</div>`}
       </div>
+      <div class="mb-3">
+        <p class="mb-2 text-xs uppercase tracking-[0.12em] text-zinc-500">Pitch Stats</p>
+        <div class="pitch-stat-grid text-sm">
+          ${metricTile('Pitch', pitchName)}
+          ${metricTile('Pitch Speed', formatDecimal(row.release_speed), 'mph')}
+          ${metricTile('Effective', formatDecimal(row.effective_speed), 'mph')}
+          ${metricTile('Perceived', formatDecimal(row.perceived_velocity))}
+          ${metricTile('Spin Rate', formatInteger(row.release_spin_rate), 'rpm')}
+        </div>
+      </div>
       <div class="grid grid-cols-3 gap-2 text-sm">
-        <div class="rounded-md bg-zinc-900/80 p-2">
-          <p class="text-[11px] uppercase tracking-[0.08em] text-zinc-500">Bat Speed</p>
-          <p class="text-lg">${row.bat_speed ? Number(row.bat_speed).toFixed(1) : '--'} <span class="text-xs text-zinc-400">mph</span></p>
-        </div>
-        <div class="rounded-md bg-zinc-900/80 p-2">
-          <p class="text-[11px] uppercase tracking-[0.08em] text-zinc-500">Swing Length</p>
-          <p class="text-lg">${row.swing_length ? Number(row.swing_length).toFixed(1) : '--'} <span class="text-xs text-zinc-400">ft</span></p>
-        </div>
-        <div class="rounded-md bg-zinc-900/80 p-2">
-          <p class="text-[11px] uppercase tracking-[0.08em] text-zinc-500">Miss</p>
-          <p class="text-lg">${row.strike_zone_distance_inches !== null && row.strike_zone_distance_inches !== undefined ? Number(row.strike_zone_distance_inches).toFixed(1) : '--'} <span class="text-xs text-zinc-400">in</span></p>
-        </div>
+        ${metricTile('Bat Speed', formatDecimal(row.bat_speed), 'mph')}
+        ${metricTile('Swing Length', formatDecimal(row.swing_length), 'ft')}
+        ${metricTile('Miss', formatDecimal(row.strike_zone_distance_inches), 'in')}
       </div>
     </article>
   `;

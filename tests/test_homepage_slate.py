@@ -30,6 +30,13 @@ def test_homepage_loads_selected_date_top_five_swords():
     assert "ensure_videos: 'true'" in source
     assert "updateHeroMetricsFromSlate" in source
     assert "metric-clips-ready" in source
+    assert "Pitch Stats" in source
+    assert "Pitch Speed" in source
+    assert "Effective" in source
+    assert "Perceived" in source
+    assert "Spin Rate" in source
+    assert "release_spin_rate" in source
+    assert "perceived_velocity" in source
     assert "/share/x/draft" in source
     assert "draftXPostButton" in source
     assert "copyXDraftButton" in source
