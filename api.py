@@ -9,9 +9,11 @@ from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime, timezone
 import os
+import re
 from supabase import create_client
 from dotenv import load_dotenv
 from env_config import get_env
+from starlette.concurrency import run_in_threadpool
 
 # Load environment variables
 load_dotenv()
@@ -57,6 +59,8 @@ VIDEO_BACKLOG_SELECT = (
     "description,events,bat_speed,swing_length,sword_score,"
     "strike_zone_distance_inches,video_azure_blob_url,video_processed_at"
 )
+DAILY_SLATE_MAX_LIMIT = 5
+DATE_ONLY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 def utc_now_iso() -> str:
@@ -102,6 +106,49 @@ def normalize_sword_row(row: dict) -> dict:
 
 def normalize_sword_rows(rows: list) -> list:
     return [normalize_sword_row(row) for row in rows]
+
+
+def clamp_daily_slate_limit(limit: int) -> int:
+    try:
+        parsed = int(limit)
+    except (TypeError, ValueError):
+        parsed = DAILY_SLATE_MAX_LIMIT
+    return max(1, min(parsed, DAILY_SLATE_MAX_LIMIT))
+
+
+def validate_slate_date(date: str) -> str:
+    if not date or not DATE_ONLY_RE.match(str(date)):
+        raise HTTPException(status_code=400, detail="Date must be YYYY-MM-DD")
+
+    try:
+        datetime.strptime(date, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Date must be a valid YYYY-MM-DD date")
+
+    return date
+
+
+def find_missing_video_rows(rows: list) -> list:
+    return [row for row in rows if not row.get("video_azure_blob_url")]
+
+
+def build_daily_slate_response(
+    date: str,
+    limit: int,
+    rows: list,
+    hydrated: int = 0,
+) -> dict:
+    normalized_rows = normalize_sword_rows(rows)
+
+    return {
+        "date": date,
+        "limit": limit,
+        "count": len(normalized_rows),
+        "hydrated": hydrated,
+        "pending_videos": len(find_missing_video_rows(normalized_rows)),
+        "rows": normalized_rows,
+        "last_checked": utc_now_iso(),
+    }
 
 
 def normalize_video_backlog_row(row: dict) -> dict:
@@ -197,6 +244,34 @@ def _count_video_backlog_rows(date: Optional[str] = None, cached: Optional[bool]
     return result.count or 0
 
 
+def fetch_daily_slate_rows(date: str, limit: int) -> list:
+    result = supabase.table('mlb_pitches_enhanced')\
+        .select('*')\
+        .eq('game_date', date)\
+        .eq('game_type', 'R')\
+        .gt('sword_score', 0)\
+        .order('sword_score', desc=True)\
+        .limit(limit)\
+        .execute()
+
+    return result.data or []
+
+
+async def hydrate_missing_daily_slate_videos(rows: list, date: str) -> int:
+    missing_rows = find_missing_video_rows(rows)
+    if not missing_rows:
+        return 0
+
+    import pandas as pd
+    from process_daily_sword_videos import process_videos_for_swords
+
+    return await run_in_threadpool(
+        process_videos_for_swords,
+        pd.DataFrame(missing_rows),
+        date,
+    )
+
+
 @app.get("/data/rows")
 async def get_rows(
     request: Request,
@@ -252,6 +327,41 @@ async def get_count(
         return {"count": result.count or 0}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/daily-slate")
+async def get_daily_slate(date: str, limit: int = 5, ensure_videos: bool = True):
+    """Return a capped daily top-five slate, optionally caching missing clips first."""
+    validated_date = validate_slate_date(date)
+    capped_limit = clamp_daily_slate_limit(limit)
+    hydrated = 0
+    hydration_error = None
+
+    try:
+        rows = fetch_daily_slate_rows(validated_date, capped_limit)
+
+        if ensure_videos:
+            try:
+                hydrated = await hydrate_missing_daily_slate_videos(rows, validated_date)
+            except Exception as exc:
+                hydration_error = str(exc)
+
+            if hydrated > 0:
+                rows = fetch_daily_slate_rows(validated_date, capped_limit)
+
+        response = build_daily_slate_response(
+            date=validated_date,
+            limit=capped_limit,
+            rows=rows,
+            hydrated=hydrated,
+        )
+        if hydration_error:
+            response["hydration_error"] = hydration_error
+        return response
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 

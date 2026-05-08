@@ -14,5 +14,6 @@ def test_homepage_loads_selected_date_top_five_swords():
 
     assert "new URLSearchParams(window.location.search).get('date')" in source
     assert "refreshSlate" in source
-    assert "limit: 5" in source
+    assert "/daily-slate" in source
+    assert "ensure_videos: 'true'" in source
     assert "Sword #${idx + 1}" in source

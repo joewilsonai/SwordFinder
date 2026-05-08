@@ -106,23 +106,30 @@ export async function fetchCount(table, params = {}, options = {}) {
   return Number.isFinite(total) ? total : 0;
 }
 
-export async function fetchOpsJson(path, options = {}) {
+export async function fetchApiJson(path, params = {}, options = {}) {
   if (!API_BASE_URL) {
-    throw new Error('SwordFinder API base URL is required for ops endpoints');
+    throw new Error('SwordFinder API base URL is required for API endpoints');
   }
 
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-  const response = await fetch(`${API_BASE_URL}${normalizedPath}`, {
+  const query = buildQuery(params);
+  const separator = normalizedPath.includes('?') ? '&' : '?';
+  const url = `${API_BASE_URL}${normalizedPath}${query ? `${separator}${query}` : ''}`;
+  const response = await fetch(url, {
     method: 'GET',
     signal: options.signal,
   });
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`API ops request failed (${response.status}): ${text}`);
+    throw new Error(`API request failed (${response.status}): ${text}`);
   }
 
   return response.json();
+}
+
+export async function fetchOpsJson(path, options = {}) {
+  return fetchApiJson(path, {}, options);
 }
 
 export function formatDate(value) {

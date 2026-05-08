@@ -37,5 +37,5 @@ Deploy `ui/` as the project root.
 
 ## Notes
 - No build step required.
-- Data is read via Railway API (`/data/rows`, `/data/count`) by default.
+- Data is read via Railway API (`/daily-slate`, `/data/rows`, `/data/count`) by default.
 - Videos stream directly from Azure blob URLs stored in Supabase.

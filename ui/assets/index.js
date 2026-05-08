@@ -1,6 +1,7 @@
 import {
   bindVideoHover,
   escapeHtml,
+  fetchApiJson,
   fetchCount,
   fetchRows,
   formatCompact,
@@ -140,28 +141,36 @@ async function loadTopCards(selectedDate) {
     return;
   }
 
-  const rows = await fetchRows('mlb_pitches_enhanced', {
-    select:
-      'id,batter,pitcher,player_name,pitcher_name,batter_name,home_team,away_team,game_date,sword_score,bat_speed,swing_length,strike_zone_distance_inches,description,events,pitch_type,pitch_name,release_speed,video_azure_blob_url,inning,inning_topbot',
-    game_date: `eq.${selectedDate}`,
-    sword_score: 'gt.0',
-    order: 'sword_score.desc',
+  const slate = await fetchApiJson('/daily-slate', {
+    date: selectedDate,
     limit: 5,
+    ensure_videos: 'true',
   });
+  const rows = slate.rows || [];
 
   if (!rows.length) {
     emptyRoot.classList.remove('hidden');
     cardsRoot.classList.add('hidden');
     setStatusText(`No swords found for ${formatDate(selectedDate)}.`);
-    return;
+    return slate;
   }
 
   cardsRoot.innerHTML = rows.map(cardTemplate).join('');
   cardsRoot.classList.remove('hidden');
   emptyRoot.classList.add('hidden');
 
-  setStatusText(`Top 5 sword swings from ${formatDate(selectedDate)}.`);
+  const hydrated = Number(slate.hydrated || 0);
+  const pending = Number(slate.pending_videos || 0);
+  let status = `Top 5 sword swings from ${formatDate(selectedDate)}.`;
+  if (hydrated > 0) {
+    status += ` Cached ${hydrated} missing ${hydrated === 1 ? 'video' : 'videos'}.`;
+  }
+  if (pending > 0) {
+    status += ` ${pending} ${pending === 1 ? 'clip is' : 'clips are'} still pending.`;
+  }
+  setStatusText(status);
   bindVideoHover(cardsRoot);
+  return slate;
 }
 
 function updateUrlDate(date) {
@@ -181,7 +190,8 @@ async function refreshSlate(date, options = {}) {
   try {
     if (updateUrl) updateUrlDate(date);
     heroDate.textContent = `Selected slate: ${formatDate(date)}`;
-    await Promise.all([loadHeroMetrics(date), loadTopCards(date)]);
+    await loadTopCards(date);
+    await loadHeroMetrics(date);
   } finally {
     refreshButton.disabled = false;
     refreshButton.textContent = 'Load';

@@ -15,11 +15,12 @@ The browser reads through the Railway API by default:
 
 - `GET /data/rows`
 - `GET /data/count`
+- `GET /daily-slate`
 - `GET /swords/recent`
 - `GET /ops/video-backlog/status`
 - `GET /ops/video-backlog`
 
-The static ops page reads those endpoints to show API health, latest slate video cache status, season cache counts, and the top pending clips.
+The homepage uses `/daily-slate?date=YYYY-MM-DD&limit=5&ensure_videos=true` to return the selected top-five slate and server-side hydrate missing Azure clip URLs before rendering when possible. The static ops page reads the ops endpoints to show API health, latest slate video cache status, season cache counts, and the top pending clips.
 
 Direct browser reads from Supabase are only a fallback when `apiBaseUrl` is unset in `ui/assets/config.js`.
 
@@ -83,6 +84,7 @@ PYTHONPATH=. .venv/bin/pytest tests/test_api_sword_serialization.py tests/test_u
 python test_workflow_imports.py
 curl -fsS https://swordfinder-production.up.railway.app/health
 curl -fsS "https://swordfinder-production.up.railway.app/data/count?select=id&game_date=gte.2026-01-01&sword_score=gt.0"
+curl -fsS "https://swordfinder-production.up.railway.app/daily-slate?date=2026-05-06&limit=5&ensure_videos=false"
 curl -fsS "https://swordfinder-production.up.railway.app/ops/video-backlog/status?date=2026-05-03"
 ```
 
