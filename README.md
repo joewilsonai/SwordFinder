@@ -24,11 +24,13 @@ flowchart LR
     db[(Supabase<br/>mlb_pitches_enhanced)]
     azure[(Azure Blob Storage<br/>swordfinder-videos)]
     xai[xAI<br/>post draft generation]
+    xapi[X API<br/>native video posting]
 
     user --> vercel
     vercel -->|API-first reads| api
     api -->|read rows, profiles, ops status| db
     api -->|optional X draft| xai
+    api -->|OAuth1 media upload + v2 post| xapi
     api -->|returns video_azure_blob_url| vercel
     user -->|plays MP4 clips| azure
 
@@ -75,6 +77,7 @@ Production browser reads go through Railway by default:
 - `GET /ops/video-backlog/status`
 - `GET /ops/video-backlog`
 - `POST /share/x/draft`
+- `POST /share/x/top-sword`
 
 Direct browser reads from Supabase are fallback-only when `apiBaseUrl` is unset in `ui/assets/config.js`.
 
@@ -187,6 +190,17 @@ python backfill_daily_slate_videos.py --start-date 2026-03-25 --end-date 2026-05
 python backfill_daily_slate_videos.py --start-date 2026-03-25 --end-date 2026-05-07 --limit 5
 ```
 
+## X Sharing
+
+xAI/Grok is only used to draft optional post copy. Native X video posting uses the X API:
+
+- OAuth 1.0a user context uploads video through `upload.twitter.com/1.1/media/upload.json`.
+- The upload flow is `INIT -> APPEND -> FINALIZE -> optional STATUS polling`.
+- The returned `media_id_string` is attached to a v2 `POST /2/tweets` request.
+- OAuth2 can still create non-media posts, but SwordFinder should not rely on OAuth2 media upload unless the token is verified with `media.write` and `/2/media/upload/initialize` succeeds.
+
+See `docs/x-video-upload.md` before rotating X keys or changing post/video code.
+
 ## Deploy
 
 Backend:
@@ -211,6 +225,7 @@ VERCEL_ORG_ID=team_obaWAGPt4oUP8fqvo5zVlBsx VERCEL_PROJECT_ID=prj_mCWq6JWufw70bB
 - `ui/`: static Vercel frontend.
 - `.github/workflows/`: scheduled/manual automation.
 - `ARCHITECTURE.md`: expanded architecture notes and sequence diagrams.
+- `docs/x-video-upload.md`: X video upload and native video posting runbook.
 - `PROGRESS_2026.md`, `DECISIONS_2026.md`, `FINAL_REPORT_2026.md`: revival notes and operating decisions.
 
 ## Next Functional Work
