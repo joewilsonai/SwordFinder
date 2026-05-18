@@ -14,6 +14,10 @@ def test_leaderboards_has_pitch_type_search_control():
     assert 'id="pitch-type-chip-list"' in html
     assert 'id="leaderboard-heading"' in html
     assert 'id="leaderboard-cards" class="grid gap-6"' in html
+    assert 'id="leaderboard-view-tabs"' in html
+    assert 'data-board-view="pitch-types"' in html
+    assert 'data-board-view="hitters"' in html
+    assert 'data-board-view="pitchers"' in html
     assert "Top 5 By Pitch Type" in html
 
 
@@ -50,3 +54,19 @@ def test_leaderboards_shows_top_five_sections_by_pitch_type():
     assert "renderPitchTypeChips" in source
     assert "bindPitchExplorer" in source
     assert "data-pitch-filter" in source
+
+
+def test_leaderboards_have_clickable_sword_cards_and_season_profile_views():
+    source = Path("ui/assets/leaderboards.js").read_text()
+
+    assert "activeBoardView" in source
+    assert "normalizeBoardView" in source
+    assert "bindBoardViewTabs" in source
+    assert "renderHitterLeaderboardCards" in source
+    assert "renderPitcherLeaderboardCards" in source
+    assert "leaderboard-profile-grid" in source
+    assert "data-sword-href" in source
+    assert "bindLeaderboardCardClicks" in source
+    assert "linkForSword" in source
+    assert "params.get('view')" in source
+    assert "url.searchParams.set('view', activeBoardView)" in source

@@ -219,6 +219,79 @@ body {
   padding: 1rem;
 }
 
+.board-view-tabs,
+.leaderboard-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.clickable-sword-card {
+  cursor: pointer;
+  transition: border-color 160ms ease, transform 160ms ease, background 160ms ease;
+}
+
+.clickable-sword-card:hover,
+.clickable-sword-card:focus-visible {
+  border-color: rgba(255, 107, 107, 0.48);
+  background:
+    linear-gradient(145deg, rgba(223, 29, 47, 0.1), rgba(255, 255, 255, 0.018)),
+    rgba(0, 0, 0, 0.22);
+}
+
+.clickable-sword-card:focus-visible {
+  outline: 2px solid rgba(255, 107, 107, 0.45);
+  outline-offset: 3px;
+}
+
+.leaderboard-card-actions {
+  align-items: center;
+  margin-top: 0.8rem;
+}
+
+.leaderboard-profile-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.leaderboard-profile-card {
+  min-width: 0;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015)),
+    rgba(0, 0, 0, 0.22);
+}
+
+.leaderboard-profile-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.leaderboard-profile-stats div {
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.24);
+  padding: 0.65rem;
+}
+
+.leaderboard-profile-stats p {
+  color: var(--muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.leaderboard-profile-stats strong {
+  display: block;
+  margin-top: 0.4rem;
+  color: var(--ink);
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
 .leaderboard-pitch-grid {
   display: grid;
   gap: 1rem;
@@ -245,6 +318,10 @@ body {
 }
 
 @media (min-width: 1024px) {
+  .leaderboard-profile-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .leaderboard-pitch-grid {
     grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
     align-items: start;

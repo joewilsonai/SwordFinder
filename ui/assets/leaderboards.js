@@ -6,6 +6,7 @@ import {
   latestSeasonRange,
   linkForPitcher,
   linkForPlayer,
+  linkForSword,
   videoPreviewUrl,
 } from './supabase-rest.js';
 import { mountNav, setFooter, setStatusText } from './layout.js';
@@ -21,12 +22,14 @@ const pitchTypeFilter = document.getElementById('pitch-type-filter');
 const clearPitchFilterButton = document.getElementById('clear-pitch-filter');
 const pitchFamilyRail = document.getElementById('pitch-family-rail');
 const pitchTypeChipList = document.getElementById('pitch-type-chip-list');
+const boardViewTabs = document.getElementById('leaderboard-view-tabs');
 const rangeButtons = Array.from(document.querySelectorAll('[data-range]'));
 
 const season = latestSeasonRange();
 let latestDate = null;
 let activeRange = 'week';
 let activePitchFilter = '';
+let activeBoardView = 'pitch-types';
 let pitchTypeLabels = new Map();
 
 const PITCH_FAMILIES = [
@@ -48,6 +51,7 @@ const PITCH_FAMILIES = [
 ];
 
 const PITCH_FAMILY_BY_ID = new Map(PITCH_FAMILIES.map((family) => [family.id, family]));
+const BOARD_VIEWS = new Set(['pitch-types', 'hitters', 'pitchers']);
 
 function normalizePitchType(value) {
   const normalized = String(value || '').trim().toUpperCase();
@@ -60,6 +64,20 @@ function setActiveRange(range) {
     const isActive = btn.dataset.range === activeRange;
     btn.classList.toggle('primary', isActive);
     btn.classList.toggle('secondary', !isActive);
+  });
+}
+
+function normalizeBoardView(value) {
+  const view = String(value || '').trim().toLowerCase();
+  return BOARD_VIEWS.has(view) ? view : 'pitch-types';
+}
+
+function setActiveBoardView(value) {
+  activeBoardView = normalizeBoardView(value);
+  boardViewTabs?.querySelectorAll('[data-board-view]').forEach((button) => {
+    const isActive = button.dataset.boardView === activeBoardView;
+    button.classList.toggle('primary', isActive);
+    button.classList.toggle('secondary', !isActive);
   });
 }
 
@@ -92,6 +110,12 @@ function updateUrlState() {
   } else {
     url.searchParams.delete('pitch_type');
     url.searchParams.delete('pitch_group');
+  }
+
+  if (activeBoardView === 'pitch-types') {
+    url.searchParams.delete('view');
+  } else {
+    url.searchParams.set('view', activeBoardView);
   }
 
   window.history.replaceState({}, '', url);
@@ -197,6 +221,37 @@ function bindPitchExplorer() {
   });
 }
 
+function bindBoardViewTabs() {
+  boardViewTabs?.addEventListener('click', async (event) => {
+    const target = event.target.closest('[data-board-view]');
+    if (!target) return;
+    setActiveBoardView(target.dataset.boardView);
+    if (activeBoardView !== 'pitch-types') setActiveRange('season');
+    updateUrlState();
+    await refresh();
+  });
+}
+
+function shouldUseNativeTarget(target) {
+  return Boolean(target.closest('a, button, input, label, select, textarea, video'));
+}
+
+function bindLeaderboardCardClicks() {
+  cardsRoot?.addEventListener('click', (event) => {
+    const card = event.target.closest('[data-sword-href]');
+    if (!card || shouldUseNativeTarget(event.target)) return;
+    window.location.href = card.dataset.swordHref;
+  });
+
+  cardsRoot?.addEventListener('keydown', (event) => {
+    if (!['Enter', ' '].includes(event.key) || shouldUseNativeTarget(event.target)) return;
+    const card = event.target.closest('[data-sword-href]');
+    if (!card) return;
+    event.preventDefault();
+    window.location.href = card.dataset.swordHref;
+  });
+}
+
 function rangeStart() {
   if (!latestDate) return season.startDate;
   const latest = new Date(`${latestDate}T00:00:00`);
@@ -238,19 +293,25 @@ function renderSwordCard(row, rank, options = {}) {
   const pitch = row.pitch_name || row.pitch_type || '--';
   const pitchCode = row.pitch_type && row.pitch_name ? ` (${row.pitch_type})` : '';
   const cardClass = featured ? 'leaderboard-feature-card' : 'leaderboard-rank-card';
+  const swordLink = linkForSword(row);
+  const hitterName = row.batter_name || 'Unknown';
 
   return `
-      <article class="${cardClass} card sword-card p-3 md:p-4">
+      <article class="${cardClass} clickable-sword-card card sword-card p-3 md:p-4" data-sword-href="${escapeHtml(swordLink)}" tabindex="0" role="link" aria-label="Open sword page">
         ${renderLeaderboardVideo(row, featured ? 'mb-4' : 'mb-3')}
         <div class="flex items-start justify-between gap-3">
           <div class="min-w-0">
             <p class="text-xs uppercase tracking-[0.12em] text-zinc-500">#${rank} Sword</p>
-            <a class="${featured ? 'text-3xl' : 'text-xl'} block truncate font-semibold leading-none hover:text-[var(--accent-soft)]" href="${linkForPlayer(row)}">${escapeHtml(row.batter_name || 'Unknown')}</a>
+            <a class="${featured ? 'text-3xl' : 'text-xl'} block truncate font-semibold leading-none hover:text-[var(--accent-soft)]" href="${linkForPlayer(row)}">${escapeHtml(hitterName)}</a>
           </div>
           <span class="${featured ? 'text-3xl' : 'text-2xl'} shrink-0 font-semibold text-[var(--accent-soft)]">${Number(row.sword_score || 0).toFixed(1)}</span>
         </div>
         <p class="mt-3 text-xs uppercase tracking-[0.08em] text-zinc-400">${formatDate(row.game_date)} • ${escapeHtml(pitch)}${escapeHtml(pitchCode)} ${Number(row.release_speed || 0).toFixed(1)} mph</p>
         <p class="mt-1 text-sm text-zinc-400">vs <a class="underline decoration-zinc-600 hover:decoration-[var(--accent-soft)]" href="${linkForPitcher(row)}">${escapeHtml(row.pitcher_name || row.player_name || 'Unknown pitcher')}</a></p>
+        <div class="leaderboard-card-actions">
+          <a class="primary rounded-md px-3 py-2 text-xs uppercase tracking-[0.08em]" href="${escapeHtml(swordLink)}">View Sword</a>
+          <span class="text-xs uppercase tracking-[0.08em] text-zinc-500">Click card for clip</span>
+        </div>
       </article>
     `;
 }
@@ -274,10 +335,12 @@ function renderTopSwordCards(rows) {
     .filter((group) => group.rows.length);
 
   if (!groups.length) {
+    cardsRoot.className = 'grid gap-6';
     cardsRoot.innerHTML = '';
     return 0;
   }
 
+  cardsRoot.className = 'grid gap-6';
   cardsRoot.innerHTML = groups
     .map(
       (group) => `
@@ -319,19 +382,89 @@ function aggregateBy(rows, idKey, nameKey) {
         count: 0,
         totalScore: 0,
         bestScore: 0,
+        bestRow: null,
       });
     }
 
     const bucket = map.get(id);
+    const score = Number(row.sword_score || 0);
     bucket.count += 1;
-    bucket.totalScore += Number(row.sword_score || 0);
-    bucket.bestScore = Math.max(bucket.bestScore, Number(row.sword_score || 0));
+    bucket.totalScore += score;
+    if (score >= bucket.bestScore) {
+      bucket.bestScore = score;
+      bucket.bestRow = row;
+    }
   });
 
   return Array.from(map.values()).map((item) => ({
     ...item,
     avgScore: item.count ? item.totalScore / item.count : 0,
   }));
+}
+
+function renderProfileLeaderboardCard(item, rank, kind) {
+  const isPitcher = kind === 'pitcher';
+  const profileUrl = isPitcher ? linkForPitcher({ pitcher: item.id }) : `/player/${item.id}`;
+  const topRow = item.bestRow || {};
+  const topSwordUrl = linkForSword(topRow);
+  const opponent = isPitcher
+    ? topRow.batter_name || 'Unknown hitter'
+    : topRow.pitcher_name || topRow.player_name || 'Unknown pitcher';
+  const pitch = topRow.pitch_name || topRow.pitch_type || 'Pitch';
+
+  return `
+    <article class="leaderboard-profile-card card p-4">
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <p class="text-xs uppercase tracking-[0.12em] text-zinc-500">#${rank} ${isPitcher ? 'Pitcher' : 'Hitter'}</p>
+          <a class="block truncate text-2xl font-semibold leading-none hover:text-[var(--accent-soft)]" href="${profileUrl}">${escapeHtml(item.name)}</a>
+        </div>
+        <span class="text-3xl font-semibold text-[var(--accent-soft)]">${item.count}</span>
+      </div>
+      <div class="leaderboard-profile-stats">
+        <div>
+          <p>Avg</p>
+          <strong>${item.avgScore.toFixed(1)}</strong>
+        </div>
+        <div>
+          <p>${isPitcher ? 'Best' : 'Worst'}</p>
+          <strong>${item.bestScore.toFixed(1)}</strong>
+        </div>
+        <div>
+          <p>Swords</p>
+          <strong>${item.count}</strong>
+        </div>
+      </div>
+      <p class="mt-3 text-sm text-zinc-400">
+        Top sword: ${escapeHtml(pitch)} on ${formatDate(topRow.game_date)}
+        ${isPitcher ? 'vs' : 'from'} ${escapeHtml(opponent)}.
+      </p>
+      <div class="leaderboard-card-actions">
+        <a class="primary rounded-md px-3 py-2 text-xs uppercase tracking-[0.08em]" href="${topSwordUrl}">View Top Sword</a>
+        <a class="secondary rounded-md px-3 py-2 text-xs uppercase tracking-[0.08em]" href="${profileUrl}">${isPitcher ? 'Pitcher Profile' : 'Hitter History'}</a>
+      </div>
+    </article>
+  `;
+}
+
+function renderHitterLeaderboardCards(rows) {
+  const hitters = aggregateBy(rows, 'batter', 'batter_name')
+    .sort((a, b) => b.count - a.count || b.bestScore - a.bestScore || b.avgScore - a.avgScore)
+    .slice(0, 12);
+
+  cardsRoot.className = 'leaderboard-profile-grid';
+  cardsRoot.innerHTML = hitters.map((item, index) => renderProfileLeaderboardCard(item, index + 1, 'hitter')).join('');
+  return hitters.length;
+}
+
+function renderPitcherLeaderboardCards(rows) {
+  const pitchers = aggregateBy(rows, 'pitcher', 'pitcher_name')
+    .sort((a, b) => b.count - a.count || b.bestScore - a.bestScore || b.avgScore - a.avgScore)
+    .slice(0, 12);
+
+  cardsRoot.className = 'leaderboard-profile-grid';
+  cardsRoot.innerHTML = pitchers.map((item, index) => renderProfileLeaderboardCard(item, index + 1, 'pitcher')).join('');
+  return pitchers.length;
 }
 
 function renderHitterTable(rows) {
@@ -485,22 +618,38 @@ async function refresh() {
 
   const start = rangeStart();
   const rows = await fetchLeaderboardRows(start);
-  const displayedRows = renderTopSwordCards(rows);
+  let displayedRows = 0;
   renderHitterTable(rows);
   renderPitcherTable(rows);
 
   const rangeLabel = activeRange === 'season' ? `${season.year} season` : `last ${activeRange === 'week' ? '7' : '30'} days`;
   const pitchLabel = activePitchLabel();
-  heading.textContent = activePitchType()
-    ? `Top 5 ${activePitchType()} Swords`
-    : `Top 5 By Pitch Type`;
+
+  if (activeBoardView === 'hitters') {
+    displayedRows = renderHitterLeaderboardCards(rows);
+    heading.textContent = 'Top Hitter Sword Leaders';
+  } else if (activeBoardView === 'pitchers') {
+    displayedRows = renderPitcherLeaderboardCards(rows);
+    heading.textContent = 'Top Pitcher Sword Leaders';
+  } else {
+    displayedRows = renderTopSwordCards(rows);
+    heading.textContent = activePitchType()
+      ? `Top 5 ${activePitchType()} Swords`
+      : `Top 5 By Pitch Type`;
+  }
 
   if (!displayedRows) {
     setStatusText(`No ${pitchLabel} found for ${rangeLabel}.`);
     return;
   }
 
-  setStatusText(`Showing top 5 swords for ${pitchLabel} by pitch type for ${rangeLabel} ending ${formatDate(latestDate)}.`);
+  if (activeBoardView === 'hitters') {
+    setStatusText(`Showing ${displayedRows} hitter sword leaders for ${pitchLabel} in ${rangeLabel} ending ${formatDate(latestDate)}.`);
+  } else if (activeBoardView === 'pitchers') {
+    setStatusText(`Showing ${displayedRows} pitcher sword leaders for ${pitchLabel} in ${rangeLabel} ending ${formatDate(latestDate)}.`);
+  } else {
+    setStatusText(`Showing top 5 swords for ${pitchLabel} by pitch type for ${rangeLabel} ending ${formatDate(latestDate)}.`);
+  }
 }
 
 rangeButtons.forEach((btn) => {
@@ -525,12 +674,18 @@ clearPitchFilterButton.addEventListener('click', async () => {
 });
 
 bindPitchExplorer();
+bindBoardViewTabs();
+bindLeaderboardCardClicks();
 
 async function init() {
   try {
     setStatusText('Loading leaderboard data');
     const params = new URLSearchParams(window.location.search);
     setActiveRange(params.get('range') || activeRange);
+    setActiveBoardView(params.get('view'));
+    if (activeBoardView !== 'pitch-types' && !params.has('range')) {
+      setActiveRange('season');
+    }
     const pitchType = normalizePitchType(params.get('pitch_type') || params.get('pitch'));
     const pitchGroup = String(params.get('pitch_group') || '').trim().toLowerCase();
     if (pitchType) {
@@ -538,6 +693,7 @@ async function init() {
     } else if (PITCH_FAMILY_BY_ID.has(pitchGroup)) {
       activePitchFilter = `family:${pitchGroup}`;
     }
+    updateUrlState();
     await fetchLatestDate();
     await fetchPitchTypeOptions();
     await refresh();
