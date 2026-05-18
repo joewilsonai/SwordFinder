@@ -32,6 +32,13 @@ def test_homepage_keeps_intro_anchor_target():
     assert "https://www.youtube.com/shorts/9PyeRAIlhYU" in html
     assert "https://www.youtube.com/shorts/HPX17vAjNvA" in html
     assert "https://www.youtube.com/shorts/e_LYlEdGhtk" in html
+    assert "https://www.youtube-nocookie.com/embed/ixfVMhdIO8s?rel=0" in html
+    assert "https://www.youtube-nocookie.com/embed/SvFqq9fm2ac?rel=0" in html
+    assert "https://www.youtube-nocookie.com/embed/9PyeRAIlhYU?rel=0" in html
+    assert "https://www.youtube-nocookie.com/embed/HPX17vAjNvA?rel=0" in html
+    assert "https://www.youtube-nocookie.com/embed/e_LYlEdGhtk?rel=0" in html
+    assert html.count('loading="lazy"') >= 5
+    assert html.count("allowfullscreen") >= 5
     assert "Trevor Bauer" in html
     assert "Momentum" in html
 
@@ -50,3 +57,8 @@ def test_intro_has_mobile_friendly_styles():
     assert ".sword-lore" in css
     assert ".lore-grid" in css
     assert ".lore-card" in css
+    assert ".lore-video" in css
+    assert ".lore-video-short" in css
+    assert ".lore-video-wide" in css
+    assert "aspect-ratio: 9 / 16" in css
+    assert "aspect-ratio: 16 / 9" in css
