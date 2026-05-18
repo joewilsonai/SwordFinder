@@ -24,7 +24,7 @@ File: `production-smoke.yml`
 
 - Runs daily at 15:30 UTC.
 - Can be triggered manually.
-- Checks Railway `/health`, live API data, `/swords/recent`, and core Vercel routes.
+- Checks Railway `/health`, live API data, `/swords/recent`, video backlog status, and core `swordfinder.com` routes.
 
 ## Required Secrets
 

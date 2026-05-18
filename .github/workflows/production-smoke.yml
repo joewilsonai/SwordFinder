@@ -19,7 +19,7 @@ jobs:
       - name: Check Railway API and Vercel UI
         env:
           API_BASE: https://swordfinder-production.up.railway.app
-          UI_BASE: https://ui-one-henna.vercel.app
+          UI_BASE: https://swordfinder.com
         run: |
           set -euo pipefail
 
