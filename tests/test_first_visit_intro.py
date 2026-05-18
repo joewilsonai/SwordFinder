@@ -13,6 +13,8 @@ def test_shared_layout_mounts_first_visit_intro():
     assert "Bauer helped make the celebration iconic." in source
     assert "SwordFinder ranks the nastiest misses with real clips." in source
     assert "data-sword-intro-dismiss" in source
+    assert "Watch the lore clips" in source
+    assert "/index.html#sword-lore" in source
     assert "if (active !== 'ops')" in source
 
 
@@ -21,6 +23,13 @@ def test_homepage_keeps_intro_anchor_target():
 
     assert 'id="what-is-a-sword"' in html
     assert "What is a sword?" in html
+    assert 'id="sword-lore"' in html
+    assert "Sword Lore" in html
+    assert "https://www.youtube.com/watch?v=ixfVMhdIO8s" in html
+    assert "https://x.com/PitchingNinja/status/1382299579266240513?s=20" in html
+    assert "https://x.com/PitchingNinja/status/1386150807431745537?s=20" in html
+    assert "https://www.youtube.com/shorts/CyjM5LHcbC8" in html
+    assert "Bauer sword celebration" in html
 
 
 def test_intro_has_mobile_friendly_styles():
@@ -34,3 +43,6 @@ def test_intro_has_mobile_friendly_styles():
     assert ".sword-intro-close" in css
     assert "width: 48px" in css
     assert "height: 48px" in css
+    assert ".sword-lore" in css
+    assert ".lore-grid" in css
+    assert ".lore-card" in css

@@ -48,7 +48,7 @@ export function mountFirstVisitIntro() {
         <button class="primary rounded-md px-4 py-2 text-sm uppercase tracking-[0.08em]" type="button" data-sword-intro-dismiss>Start Watching</button>
         <a class="secondary rounded-md px-4 py-2 text-sm uppercase tracking-[0.08em]" href="/leaderboards.html" data-sword-intro-dismiss>See Leaderboards</a>
       </div>
-      <a class="mt-3 inline-flex min-h-12 items-center text-sm text-zinc-400 underline decoration-zinc-700 hover:text-zinc-200 hover:decoration-[var(--accent-soft)]" href="/index.html#what-is-a-sword" data-sword-intro-dismiss>Read the short version</a>
+      <a class="mt-3 inline-flex min-h-12 items-center text-sm text-zinc-400 underline decoration-zinc-700 hover:text-zinc-200 hover:decoration-[var(--accent-soft)]" href="/index.html#sword-lore" data-sword-intro-dismiss>Watch the lore clips</a>
     </div>
   `;
 
