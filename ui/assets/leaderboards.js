@@ -6,6 +6,7 @@ import {
   latestSeasonRange,
   linkForPitcher,
   linkForPlayer,
+  videoPreviewUrl,
 } from './supabase-rest.js';
 import { mountNav, setFooter, setStatusText } from './layout.js';
 
@@ -221,10 +222,12 @@ function renderLeaderboardVideo(row, className = '') {
     `;
   }
 
+  const previewUrl = videoPreviewUrl(row.video_azure_blob_url);
+
   return `
     <div class="leaderboard-video video-shell ${className}">
       <video data-hover-unmute="true" muted playsinline controls preload="metadata">
-        <source src="${escapeHtml(row.video_azure_blob_url)}" type="video/mp4" />
+        <source src="${escapeHtml(previewUrl)}" type="video/mp4" />
       </video>
     </div>
   `;

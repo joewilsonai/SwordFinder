@@ -194,6 +194,12 @@ export function escapeHtml(value) {
   return div.innerHTML;
 }
 
+export function videoPreviewUrl(value, seconds = 0.25) {
+  const url = String(value || '').trim();
+  if (!url || url.includes('#')) return url;
+  return `${url}#t=${seconds}`;
+}
+
 export function linkForPlayer(row) {
   const id = row?.batter;
   if (!id) return '#';

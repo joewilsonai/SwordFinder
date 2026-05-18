@@ -256,18 +256,93 @@ body {
 }
 
 .sword-definition {
+  position: relative;
+  display: grid;
+  gap: 1.25rem;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(223, 29, 47, 0.13), transparent 38%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.012)),
+    rgba(0, 0, 0, 0.22);
+  padding: 1rem;
+}
+
+.sword-definition::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: linear-gradient(180deg, var(--accent-soft), rgba(223, 29, 47, 0.12));
+}
+
+.sword-definition-quote,
+.sword-definition-copy {
+  position: relative;
+  min-width: 0;
+}
+
+.sword-definition-quote blockquote {
+  margin-top: 0.55rem;
+  max-width: 44rem;
+  color: var(--ink);
+  font-size: 1.9rem;
+  font-weight: 600;
+  line-height: 0.98;
+}
+
+.sword-definition-quote p:last-child {
+  margin-top: 0.75rem;
+  color: var(--accent-soft);
+  font-size: 0.8rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.sword-definition-copy {
+  display: grid;
+  gap: 0.85rem;
+  color: var(--muted);
+}
+
+.sword-definition-lede {
+  color: #d4d4d4;
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
+.sword-definition-rules {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.sword-definition-rules p {
+  border-inline-start: 1px solid rgba(255, 255, 255, 0.14);
+  padding-inline-start: 0.75rem;
+  line-height: 1.35;
+}
+
+.sword-definition-rules span {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.sword-definition-actions {
   display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  border-block: 1px solid rgba(255, 255, 255, 0.11);
-  padding-block: 1.2rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
 @media (min-width: 768px) {
   .sword-definition {
-    flex-direction: row;
+    grid-template-columns: minmax(0, 1.35fr) minmax(18rem, 0.75fr);
     align-items: center;
-    justify-content: space-between;
+    padding: 1.35rem 1.5rem;
+  }
+
+  .sword-definition-quote blockquote {
+    font-size: 2.35rem;
   }
 }
 
