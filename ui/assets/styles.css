@@ -108,8 +108,48 @@ body {
 
 .pitch-type-group {
   min-width: 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.11);
-  padding-top: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background:
+    linear-gradient(140deg, rgba(223, 29, 47, 0.08), transparent 34%),
+    rgba(255, 255, 255, 0.018);
+  padding: 1rem;
+}
+
+.leaderboard-pitch-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.leaderboard-feature-card,
+.leaderboard-rank-card {
+  min-width: 0;
+}
+
+.leaderboard-feature-card {
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015)),
+    rgba(0, 0, 0, 0.2);
+}
+
+.leaderboard-rank-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.leaderboard-video {
+  border-radius: 10px;
+}
+
+@media (min-width: 1024px) {
+  .leaderboard-pitch-grid {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .leaderboard-rank-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .sword-definition {

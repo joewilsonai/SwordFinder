@@ -8,6 +8,7 @@ def test_leaderboards_has_pitch_type_search_control():
     assert "Search by pitch family or type" in html
     assert 'id="clear-pitch-filter"' in html
     assert 'id="leaderboard-heading"' in html
+    assert 'id="leaderboard-cards" class="grid gap-6"' in html
     assert "Top 5 By Pitch Type" in html
 
 
@@ -23,6 +24,11 @@ def test_leaderboards_shows_top_five_sections_by_pitch_type():
     assert "selectedPitchCodes" in source
     assert "fetchPitchTypeOptions" in source
     assert "fetchLeaderboardRows" in source
+    assert "bindVideoHover" in source
+    assert "renderLeaderboardVideo" in source
+    assert "video_azure_blob_url" in source
+    assert "leaderboard-pitch-grid" in source
+    assert "leaderboard-feature-card" in source
     assert "select: 'pitch_type,pitch_name'" in source
     assert "pitch_type: 'not.is.null'" in source
     assert "params.pitch_type = `eq.${pitchType}`" in source

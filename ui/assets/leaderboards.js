@@ -1,4 +1,5 @@
 import {
+  bindVideoHover,
   escapeHtml,
   fetchRows,
   formatDate,
@@ -151,19 +152,41 @@ function rangeStart() {
   return start.toISOString().split('T')[0];
 }
 
-function renderSwordCard(row, rank) {
+function renderLeaderboardVideo(row, className = '') {
+  if (!row.video_azure_blob_url) {
+    return `
+      <div class="leaderboard-video video-shell ${className}">
+        <div class="video-placeholder text-sm text-zinc-500">Video pending</div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="leaderboard-video video-shell ${className}">
+      <video data-hover-unmute="true" muted playsinline controls preload="metadata">
+        <source src="${escapeHtml(row.video_azure_blob_url)}" type="video/mp4" />
+      </video>
+    </div>
+  `;
+}
+
+function renderSwordCard(row, rank, options = {}) {
+  const { featured = false } = options;
   const pitch = row.pitch_name || row.pitch_type || '--';
   const pitchCode = row.pitch_type && row.pitch_name ? ` (${row.pitch_type})` : '';
+  const cardClass = featured ? 'leaderboard-feature-card' : 'leaderboard-rank-card';
+
   return `
-      <article class="card sword-card p-3 md:p-4">
-        <div class="mb-2 flex items-center justify-between">
-          <div class="flex min-w-0 items-center gap-2">
-            <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-zinc-700 bg-black/60 text-sm font-semibold text-[var(--accent-soft)]">${rank}</span>
-            <a class="truncate font-semibold hover:text-[var(--accent-soft)]" href="${linkForPlayer(row)}">${escapeHtml(row.batter_name || 'Unknown')}</a>
+      <article class="${cardClass} card sword-card p-3 md:p-4">
+        ${renderLeaderboardVideo(row, featured ? 'mb-4' : 'mb-3')}
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0">
+            <p class="text-xs uppercase tracking-[0.12em] text-zinc-500">#${rank} Sword</p>
+            <a class="${featured ? 'text-3xl' : 'text-xl'} block truncate font-semibold leading-none hover:text-[var(--accent-soft)]" href="${linkForPlayer(row)}">${escapeHtml(row.batter_name || 'Unknown')}</a>
           </div>
-          <span class="text-lg text-[var(--accent-soft)]">${Number(row.sword_score || 0).toFixed(1)}</span>
+          <span class="${featured ? 'text-3xl' : 'text-2xl'} shrink-0 font-semibold text-[var(--accent-soft)]">${Number(row.sword_score || 0).toFixed(1)}</span>
         </div>
-        <p class="text-xs uppercase tracking-[0.08em] text-zinc-400">${formatDate(row.game_date)} • ${escapeHtml(pitch)}${escapeHtml(pitchCode)} ${Number(row.release_speed || 0).toFixed(1)} mph</p>
+        <p class="mt-3 text-xs uppercase tracking-[0.08em] text-zinc-400">${formatDate(row.game_date)} • ${escapeHtml(pitch)}${escapeHtml(pitchCode)} ${Number(row.release_speed || 0).toFixed(1)} mph</p>
         <p class="mt-1 text-sm text-zinc-400">vs <a class="underline decoration-zinc-600 hover:decoration-[var(--accent-soft)]" href="${linkForPitcher(row)}">${escapeHtml(row.pitcher_name || row.player_name || 'Unknown pitcher')}</a></p>
       </article>
     `;
@@ -203,14 +226,18 @@ function renderTopSwordCards(rows) {
           </div>
           <p class="text-sm text-zinc-400">Top ${group.rows.length} ${escapeHtml(group.code)} sword${group.rows.length === 1 ? '' : 's'}</p>
         </div>
-        <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-          ${group.rows.map((row, index) => renderSwordCard(row, index + 1)).join('')}
+        <div class="leaderboard-pitch-grid">
+          ${renderSwordCard(group.rows[0], 1, { featured: true })}
+          <div class="leaderboard-rank-grid">
+            ${group.rows.slice(1).map((row, index) => renderSwordCard(row, index + 2)).join('')}
+          </div>
         </div>
       </div>
     `
     )
     .join('');
 
+  bindVideoHover(cardsRoot);
   return groups.reduce((total, group) => total + group.rows.length, 0);
 }
 
@@ -360,7 +387,7 @@ async function fetchLeaderboardRows(start) {
 
   for (let offset = 0; offset < 10000; offset += pageSize) {
     const params = {
-      select: 'id,batter,pitcher,player_name,pitcher_name,batter_name,sword_score,game_date,pitch_type,pitch_name,release_speed',
+      select: 'id,batter,pitcher,player_name,pitcher_name,batter_name,sword_score,game_date,pitch_type,pitch_name,release_speed,video_azure_blob_url',
       game_type: 'eq.R',
       sword_score: 'gte.90',
       game_date: [`gte.${start}`, `lte.${latestDate}`],
