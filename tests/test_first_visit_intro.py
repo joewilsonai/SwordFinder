@@ -28,8 +28,12 @@ def test_homepage_keeps_intro_anchor_target():
     assert "https://www.youtube.com/watch?v=ixfVMhdIO8s" in html
     assert "https://x.com/PitchingNinja/status/1382299579266240513?s=20" in html
     assert "https://x.com/PitchingNinja/status/1386150807431745537?s=20" in html
-    assert "https://www.youtube.com/shorts/CyjM5LHcbC8" in html
-    assert "Bauer sword celebration" in html
+    assert "https://www.youtube.com/shorts/SvFqq9fm2ac" in html
+    assert "https://www.youtube.com/shorts/9PyeRAIlhYU" in html
+    assert "https://www.youtube.com/shorts/HPX17vAjNvA" in html
+    assert "https://www.youtube.com/shorts/e_LYlEdGhtk" in html
+    assert "Trevor Bauer" in html
+    assert "Momentum" in html
 
 
 def test_intro_has_mobile_friendly_styles():
