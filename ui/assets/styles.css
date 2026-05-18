@@ -552,6 +552,22 @@ body {
     display: flex;
     flex: 0 0 1rem;
   }
+
+  .architecture-flow-wide {
+    gap: 0.4rem;
+  }
+
+  .architecture-flow-wide .arch-node {
+    padding: 0.75rem;
+  }
+
+  .architecture-flow-wide .arch-node strong {
+    font-size: 1.05rem;
+  }
+
+  .architecture-flow-wide .arch-arrow {
+    flex-basis: 0.75rem;
+  }
 }
 
 .pitch-stat-grid {

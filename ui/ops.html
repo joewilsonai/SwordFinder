@@ -46,41 +46,47 @@
             <p class="text-xs uppercase tracking-[0.14em] text-zinc-500">System Map</p>
             <h2 class="brand-title text-4xl leading-none">How SwordFinder Works</h2>
           </div>
-          <p class="text-sm text-zinc-400 md:max-w-md">A production loop from public pitch data to scored strikeout clips, ranked leaderboards, and shareable sword pages.</p>
+          <p class="text-sm text-zinc-400 md:max-w-md">A production loop from GitHub automation to public pitch data, scored strikeout clips, cached video, and shareable sword pages.</p>
         </div>
-        <div class="architecture-flow" aria-label="SwordFinder architecture diagram">
+        <div class="architecture-flow architecture-flow-wide" aria-label="SwordFinder architecture diagram">
           <div class="arch-node">
             <span>1</span>
+            <strong>GitHub Actions</strong>
+            <p>Schedules the daily refresh and runs ingestion plus clip hydration jobs.</p>
+          </div>
+          <div class="arch-arrow" aria-hidden="true">→</div>
+          <div class="arch-node">
+            <span>2</span>
             <strong>Statcast Pull</strong>
-            <p>Daily MLB pitch rows, bat tracking, pitch context, and strikeout results.</p>
+            <p>Fetches MLB pitch rows, bat tracking, pitch context, and strikeout results.</p>
           </div>
           <div class="arch-arrow" aria-hidden="true">→</div>
           <div class="arch-node arch-node-accent">
-            <span>2</span>
+            <span>3</span>
             <strong>SwordFinder Score</strong>
             <p>Proprietary strikeout-only ranking for ugly, finished swings.</p>
           </div>
           <div class="arch-arrow" aria-hidden="true">→</div>
           <div class="arch-node">
-            <span>3</span>
+            <span>4</span>
             <strong>Supabase</strong>
             <p>Scored rows, player history, pitcher profiles, and leaderboard queries.</p>
           </div>
           <div class="arch-arrow" aria-hidden="true">→</div>
           <div class="arch-node">
-            <span>4</span>
-            <strong>Video Cache</strong>
-            <p>MLB clips resolved, downloaded, and served through Azure Blob Storage.</p>
-          </div>
-          <div class="arch-arrow" aria-hidden="true">→</div>
-          <div class="arch-node">
             <span>5</span>
-            <strong>Railway API</strong>
-            <p>Daily slate, profiles, ops routes, video hydration, and share workflows.</p>
+            <strong>Azure Blob</strong>
+            <p>Stores resolved MLB clips for fast playback on cards and detail pages.</p>
           </div>
           <div class="arch-arrow" aria-hidden="true">→</div>
           <div class="arch-node">
             <span>6</span>
+            <strong>Railway API</strong>
+            <p>Serves slate, profile, ops, video hydration, and share workflows.</p>
+          </div>
+          <div class="arch-arrow" aria-hidden="true">→</div>
+          <div class="arch-node">
+            <span>7</span>
             <strong>Vercel UI</strong>
             <p>Daily swords, leaderboards, info, profiles, and shareable sword pages.</p>
           </div>
