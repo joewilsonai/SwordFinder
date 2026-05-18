@@ -43,6 +43,10 @@ body {
   min-height: 48px;
 }
 
+.app-brand .brand-title {
+  white-space: nowrap;
+}
+
 .brand-mark {
   width: 2.25rem;
   height: 2.25rem;
@@ -263,6 +267,10 @@ body {
   flex-shrink: 0;
 }
 
+.app-nav-shell {
+  gap: 0.75rem;
+}
+
 .app-nav .app-link,
 .tap-target,
 button.primary,
@@ -326,19 +334,38 @@ a.secondary {
   line-height: 1.15;
 }
 
-@media (max-width: 480px) {
+@media (max-width: 640px) {
+  .app-nav-shell {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0.25rem;
+    justify-content: flex-start;
+  }
+
+  .app-brand {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .app-nav {
+    gap: 0.35rem;
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .app-nav .app-link {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
   .brand-mark {
     height: 2rem;
     width: 2rem;
   }
 
   .app-brand .brand-title {
-    font-size: 1.75rem;
+    font-size: clamp(1.85rem, 8vw, 2.2rem);
     letter-spacing: 0.1em;
-  }
-
-  .app-nav {
-    gap: 0.25rem;
   }
 
   .app-nav .app-link {

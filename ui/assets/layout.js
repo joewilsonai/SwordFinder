@@ -3,7 +3,7 @@ export function mountNav(active = 'home') {
   if (!nav) return;
 
   nav.innerHTML = `
-    <div class="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-3 md:px-6">
+    <div class="app-nav-shell mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-3 md:px-6">
       <a href="/index.html" class="flex items-center gap-2 app-brand" aria-label="SwordFinder home">
         <img class="brand-mark" src="/assets/brand/swordfinder-mark-white.png" alt="" />
         <span class="brand-title text-3xl tracking-[0.14em]">SwordFinder</span>
