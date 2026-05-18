@@ -20,11 +20,19 @@ function markIntroSeen() {
 function closeIntro(intro) {
   markIntroSeen();
   intro.classList.remove('is-visible');
-  window.setTimeout(() => intro.remove(), 180);
+  window.setTimeout(() => {
+    intro.remove();
+    introMounted = false;
+  }, 180);
 }
 
-export function mountFirstVisitIntro() {
-  if (introMounted || hasSeenIntro()) return;
+function shouldForceIntro() {
+  return new URLSearchParams(window.location.search).get('intro') === '1';
+}
+
+export function mountFirstVisitIntro(options = {}) {
+  const force = Boolean(options.force || shouldForceIntro());
+  if (introMounted || (!force && hasSeenIntro())) return;
 
   const intro = document.createElement('div');
   intro.className = 'sword-intro';

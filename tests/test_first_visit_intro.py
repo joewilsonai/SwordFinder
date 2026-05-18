@@ -8,6 +8,8 @@ def test_shared_layout_mounts_first_visit_intro():
     assert "mountFirstVisitIntro" in source
     assert "window.localStorage.getItem" in source
     assert "window.localStorage.setItem" in source
+    assert "get('intro') === '1'" in source
+    assert "options.force" in source
     assert "What's a Sword?" in source
     assert "Spot the shape" in source
     assert "Read the score" in source
@@ -37,6 +39,8 @@ def test_sword_info_page_contains_lore_embeds():
 
     assert "Sword Info" in html
     assert "Sword Lore" in html
+    assert 'id="replay-intro"' in html
+    assert "Replay Walkthrough" in html
     assert "https://www.youtube.com/watch?v=ixfVMhdIO8s" in html
     assert "https://x.com/PitchingNinja/status/1382299579266240513?s=20" in html
     assert "https://x.com/PitchingNinja/status/1386150807431745537?s=20" in html
@@ -54,6 +58,8 @@ def test_sword_info_page_contains_lore_embeds():
     assert "Trevor Bauer" in html
     assert "Momentum" in html
     assert "mountNav('info')" in source
+    assert "mountFirstVisitIntro({ force: true })" in source
+    assert "window.localStorage.removeItem('swordfinder:intro:v2')" in source
     assert "setFooter()" in source
 
 
