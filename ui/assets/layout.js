@@ -1,3 +1,75 @@
+const INTRO_STORAGE_KEY = 'swordfinder:intro:v1';
+let introMounted = false;
+
+function hasSeenIntro() {
+  try {
+    return window.localStorage.getItem(INTRO_STORAGE_KEY) === 'seen';
+  } catch {
+    return false;
+  }
+}
+
+function markIntroSeen() {
+  try {
+    window.localStorage.setItem(INTRO_STORAGE_KEY, 'seen');
+  } catch {
+    // If storage is blocked, the dismiss action should still work for this page view.
+  }
+}
+
+function closeIntro(intro) {
+  markIntroSeen();
+  intro.classList.remove('is-visible');
+  window.setTimeout(() => intro.remove(), 180);
+}
+
+export function mountFirstVisitIntro() {
+  if (introMounted || hasSeenIntro()) return;
+
+  const intro = document.createElement('div');
+  intro.className = 'sword-intro';
+  intro.setAttribute('role', 'dialog');
+  intro.setAttribute('aria-modal', 'true');
+  intro.setAttribute('aria-labelledby', 'sword-intro-title');
+  intro.innerHTML = `
+    <div class="sword-intro-panel">
+      <button class="sword-intro-close" type="button" aria-label="Dismiss intro" data-sword-intro-dismiss>&times;</button>
+      <p class="text-xs uppercase tracking-[0.14em] text-zinc-500">New here?</p>
+      <h2 id="sword-intro-title" class="brand-title mt-2 text-4xl leading-none text-zinc-100">What's a Sword?</h2>
+      <p class="mt-3 text-base leading-relaxed text-zinc-300">
+        A sword is the swing a hitter makes when a pitch fools him so badly the bat stops out front like he's holding a sword.
+      </p>
+      <div class="sword-intro-notes mt-4">
+        <p>Pitching Ninja popularized the term.</p>
+        <p>Bauer helped make the celebration iconic.</p>
+        <p>SwordFinder ranks the nastiest misses with real clips.</p>
+      </div>
+      <div class="mt-5 flex flex-col gap-2 sm:flex-row">
+        <button class="primary rounded-md px-4 py-2 text-sm uppercase tracking-[0.08em]" type="button" data-sword-intro-dismiss>Start Watching</button>
+        <a class="secondary rounded-md px-4 py-2 text-sm uppercase tracking-[0.08em]" href="/leaderboards.html" data-sword-intro-dismiss>See Leaderboards</a>
+      </div>
+      <a class="mt-3 inline-flex min-h-12 items-center text-sm text-zinc-400 underline decoration-zinc-700 hover:text-zinc-200 hover:decoration-[var(--accent-soft)]" href="/index.html#what-is-a-sword" data-sword-intro-dismiss>Read the short version</a>
+    </div>
+  `;
+
+  document.body.appendChild(intro);
+  introMounted = true;
+
+  const dismiss = () => closeIntro(intro);
+  intro.querySelectorAll('[data-sword-intro-dismiss]').forEach((target) => {
+    target.addEventListener('click', dismiss);
+  });
+  intro.addEventListener('click', (event) => {
+    if (event.target === intro) dismiss();
+  });
+  intro.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') dismiss();
+  });
+
+  window.requestAnimationFrame(() => intro.classList.add('is-visible'));
+  intro.querySelector('[data-sword-intro-dismiss]')?.focus();
+}
+
 export function mountNav(active = 'home') {
   const nav = document.getElementById('top-nav');
   if (!nav) return;
@@ -15,6 +87,10 @@ export function mountNav(active = 'home') {
       </div>
     </div>
   `;
+
+  if (active !== 'ops') {
+    mountFirstVisitIntro();
+  }
 }
 
 export function setFooter() {

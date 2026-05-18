@@ -106,6 +106,94 @@ body {
   background: rgba(255, 255, 255, 0.02);
 }
 
+.sword-intro {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0);
+  opacity: 0;
+  pointer-events: none;
+  transition: background 180ms ease, opacity 180ms ease;
+}
+
+.sword-intro.is-visible {
+  background: rgba(0, 0, 0, 0.74);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.sword-intro-panel {
+  position: relative;
+  width: min(100%, 34rem);
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  background:
+    linear-gradient(150deg, rgba(223, 29, 47, 0.16), transparent 35%),
+    #101010;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+  padding: 1.25rem;
+  transform: translateY(1rem);
+  transition: transform 180ms ease;
+}
+
+.sword-intro.is-visible .sword-intro-panel {
+  transform: translateY(0);
+}
+
+.sword-intro-close {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  background: rgba(0, 0, 0, 0.45);
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.sword-intro-notes {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.sword-intro-notes p {
+  min-height: 44px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.25);
+  padding: 0.65rem 0.75rem;
+  color: var(--muted);
+}
+
+@media (min-width: 768px) {
+  .sword-intro {
+    align-items: center;
+  }
+
+  .sword-intro-panel {
+    padding: 1.5rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sword-intro,
+  .sword-intro-panel {
+    transition: none;
+  }
+}
+
 .pitch-type-group {
   min-width: 0;
   border: 1px solid var(--line);
