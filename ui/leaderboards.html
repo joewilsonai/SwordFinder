@@ -21,11 +21,20 @@
           <button data-range="month" class="secondary rounded-full px-4 py-2 text-xs uppercase tracking-[0.08em]">Last 30 Days</button>
           <button data-range="season" class="secondary rounded-full px-4 py-2 text-xs uppercase tracking-[0.08em]">Season To Date</button>
         </div>
+        <div class="mt-5 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+          <div class="flex flex-col gap-2">
+            <label for="pitch-type-filter" class="text-xs uppercase tracking-[0.12em] text-zinc-500">Search by pitch type</label>
+            <select id="pitch-type-filter" class="ops-date-input w-full">
+              <option value="">All pitch types</option>
+            </select>
+          </div>
+          <button id="clear-pitch-filter" class="secondary rounded-md px-4 py-2 text-sm uppercase tracking-[0.08em]" type="button">All Pitches</button>
+        </div>
         <p id="status-text" class="mt-4 text-sm text-zinc-400 loading-dots">Loading leaderboard data</p>
       </section>
 
       <section>
-        <h2 class="brand-title mb-3 text-3xl">Top Sword Events</h2>
+        <h2 id="leaderboard-heading" class="brand-title mb-3 text-3xl">Top Sword Events</h2>
         <div id="leaderboard-cards" class="grid gap-3 md:grid-cols-2 xl:grid-cols-4"></div>
       </section>
 
