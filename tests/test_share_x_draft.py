@@ -1,11 +1,14 @@
 import asyncio
 import base64
 import pytest
+from fastapi import HTTPException
 
 import api
-from api import (
+from api_services import x_sharing as x_api
+from api_services.x_sharing import (
     ShareDraftRequest,
     TopSwordPostRequest,
+    XPostRequest,
     build_oauth1_authorization_header,
     build_top_sword_post_text,
     build_x_share_text,
@@ -27,6 +30,7 @@ from api import (
     x_safe_return_to,
     X_OAUTH_REQUESTS,
     X_OAUTH_SESSIONS,
+    X_OAUTH_COOKIE_NAME,
 )
 
 
@@ -179,7 +183,7 @@ def test_x_api_error_status_code_preserves_client_auth_errors():
 
 
 def test_x_oauth_status_reports_disabled_without_oauth2_token(monkeypatch):
-    monkeypatch.setattr(api, "get_env", lambda name, default=None: default)
+    monkeypatch.setattr(x_api, "get_env", lambda name, default=None: default)
 
     class Request:
         cookies = {}
@@ -197,11 +201,13 @@ def test_x_oauth_status_reports_oauth2_token_ready(monkeypatch):
         "X_OAUTH2_ACCESS_TOKEN": "access-token",
         "X_OAUTH2_SCOPE": "tweet.read tweet.write users.read media.write offline.access",
         "X_SCREEN_NAME": "joewilsonai",
+        "SWORDFINDER_ADMIN_TOKEN": "admin-token",
     }
-    monkeypatch.setattr(api, "get_env", lambda name, default=None: env.get(name, default))
+    monkeypatch.setattr(x_api, "get_env", lambda name, default=None: env.get(name, default))
 
     class Request:
         cookies = {}
+        headers = {"Authorization": "Bearer admin-token"}
 
     status = asyncio.run(api.x_oauth_status(Request()))
 
@@ -215,21 +221,86 @@ def test_x_oauth_status_reports_oauth2_token_ready(monkeypatch):
     assert "media.write" in status["oauth2_scopes"]
 
 
+def test_x_oauth_status_hides_server_token_without_admin(monkeypatch):
+    env = {
+        "X_OAUTH2_ACCESS_TOKEN": "access-token",
+        "X_SCREEN_NAME": "joewilsonai",
+        "SWORDFINDER_ADMIN_TOKEN": "admin-token",
+    }
+    monkeypatch.setattr(x_api, "get_env", lambda name, default=None: env.get(name, default))
+
+    class Request:
+        cookies = {}
+        headers = {}
+
+    status = asyncio.run(api.x_oauth_status(Request()))
+
+    assert status["configured"] is True
+    assert status["connected"] is False
+    assert status["screen_name"] is None
+    assert status["admin_required"] is True
+    assert status["media_upload_enabled"] is False
+
+
+def test_x_oauth_status_prefers_browser_session_over_server_token(monkeypatch):
+    env = {
+        "X_OAUTH2_ACCESS_TOKEN": "access-token",
+        "SWORDFINDER_ADMIN_TOKEN": "admin-token",
+        "X_MEDIA_UPLOAD_ENABLED": "false",
+    }
+    session_id, _ = create_x_session(
+        {
+            "oauth_token": "browser-token",
+            "oauth_token_secret": "browser-secret",
+            "screen_name": "browser_user",
+            "user_id": "123",
+        }
+    )
+    monkeypatch.setattr(x_api, "get_env", lambda name, default=None: env.get(name, default))
+
+    class Request:
+        cookies = {X_OAUTH_COOKIE_NAME: session_id}
+        headers = {}
+
+    status = asyncio.run(api.x_oauth_status(Request()))
+
+    assert status["connected"] is True
+    assert status["screen_name"] == "browser_user"
+    assert status["auth_mode"] == "oauth1_browser_session"
+    X_OAUTH_SESSIONS.clear()
+
+
 def test_x_oauth_status_reports_media_upload_disabled(monkeypatch):
     env = {
         "X_OAUTH2_ACCESS_TOKEN": "access-token",
         "X_SCREEN_NAME": "joewilsonai",
         "X_MEDIA_UPLOAD_ENABLED": "false",
+        "SWORDFINDER_ADMIN_TOKEN": "admin-token",
     }
-    monkeypatch.setattr(api, "get_env", lambda name, default=None: env.get(name, default))
+    monkeypatch.setattr(x_api, "get_env", lambda name, default=None: env.get(name, default))
 
     class Request:
         cookies = {}
+        headers = {"X-SwordFinder-Admin-Token": "admin-token"}
 
     status = asyncio.run(api.x_oauth_status(Request()))
 
     assert status["connected"] is True
     assert status["media_upload_enabled"] is False
+
+
+def test_x_admin_access_accepts_bearer_or_admin_header(monkeypatch):
+    env = {"SWORDFINDER_ADMIN_TOKEN": "admin-token"}
+    monkeypatch.setattr(x_api, "get_env", lambda name, default=None: env.get(name, default))
+
+    class BearerRequest:
+        headers = {"Authorization": "Bearer admin-token"}
+
+    class HeaderRequest:
+        headers = {"X-SwordFinder-Admin-Token": "admin-token"}
+
+    assert x_api.request_has_x_admin_access(BearerRequest()) is True
+    assert x_api.request_has_x_admin_access(HeaderRequest()) is True
 
 
 def test_oauth2_env_prefers_base64_wrapped_values(monkeypatch):
@@ -240,18 +311,18 @@ def test_oauth2_env_prefers_base64_wrapped_values(monkeypatch):
         "X_OAUTH2_ACCESS_TOKEN_B64": base64.b64encode(b"real-access-token").decode(),
         "X_OAUTH2_REFRESH_TOKEN_B64": base64.b64encode(b"real-refresh-token").decode(),
     }
-    monkeypatch.setattr(api, "get_env", lambda name, default=None: env.get(name, default))
+    monkeypatch.setattr(x_api, "get_env", lambda name, default=None: env.get(name, default))
 
-    assert api.x_oauth2_client_id() == "real-client-id"
-    assert api.x_oauth2_client_secret() == "real-client-secret"
-    assert api.x_oauth2_access_token() == "real-access-token"
-    assert api.x_oauth2_refresh_token() == "real-refresh-token"
+    assert x_api.x_oauth2_client_id() == "real-client-id"
+    assert x_api.x_oauth2_client_secret() == "real-client-secret"
+    assert x_api.x_oauth2_access_token() == "real-access-token"
+    assert x_api.x_oauth2_refresh_token() == "real-refresh-token"
 
 
 def test_oauth2_scope_parser_reads_cache_or_env(monkeypatch):
     env = {"X_OAUTH2_SCOPE": "tweet.read tweet.write users.read media.write offline.access"}
-    monkeypatch.setattr(api, "get_env", lambda name, default=None: env.get(name, default))
-    api.X_OAUTH2_TOKEN_CACHE.clear()
+    monkeypatch.setattr(x_api, "get_env", lambda name, default=None: env.get(name, default))
+    x_api.X_OAUTH2_TOKEN_CACHE.clear()
 
     assert x_oauth2_granted_scopes() == {
         "tweet.read",
@@ -261,19 +332,19 @@ def test_oauth2_scope_parser_reads_cache_or_env(monkeypatch):
         "offline.access",
     }
 
-    api.X_OAUTH2_TOKEN_CACHE["scope"] = "tweet.read tweet.write"
+    x_api.X_OAUTH2_TOKEN_CACHE["scope"] = "tweet.read tweet.write"
     assert x_oauth2_granted_scopes() == {"tweet.read", "tweet.write"}
-    api.X_OAUTH2_TOKEN_CACHE.clear()
+    x_api.X_OAUTH2_TOKEN_CACHE.clear()
 
 
 def test_media_upload_requires_recorded_media_write_scope(monkeypatch):
     env = {"X_MEDIA_UPLOAD_ENABLED": "true", "X_OAUTH2_SCOPE": "tweet.read tweet.write users.read"}
-    monkeypatch.setattr(api, "get_env", lambda name, default=None: env.get(name, default))
+    monkeypatch.setattr(x_api, "get_env", lambda name, default=None: env.get(name, default))
 
-    assert api.x_media_upload_enabled() is False
+    assert x_api.x_media_upload_enabled() is False
 
     env["X_OAUTH2_SCOPE"] = "tweet.read tweet.write users.read media.write offline.access"
-    assert api.x_media_upload_enabled() is True
+    assert x_api.x_media_upload_enabled() is True
 
 
 def test_media_upload_allows_server_side_oauth1_user_token(monkeypatch):
@@ -286,10 +357,10 @@ def test_media_upload_allows_server_side_oauth1_user_token(monkeypatch):
         "X_ACCESS_TOKEN": "oauth1-access",
         "X_ACCESS_TOKEN_SECRET": "oauth1-secret",
     }
-    monkeypatch.setattr(api, "get_env", lambda name, default=None: env.get(name, default))
+    monkeypatch.setattr(x_api, "get_env", lambda name, default=None: env.get(name, default))
 
-    assert api.x_oauth1_user_token_is_configured() is True
-    assert api.x_media_upload_enabled() is True
+    assert x_api.x_oauth1_user_token_is_configured() is True
+    assert x_api.x_media_upload_enabled() is True
 
 
 def test_upload_and_post_top_sword_video_prefers_server_oauth1_for_media(monkeypatch):
@@ -313,13 +384,13 @@ def test_upload_and_post_top_sword_video_prefers_server_oauth1_for_media(monkeyp
         calls.append(("oauth1_post", text, session["oauth_token"], media_id))
         return {"posted": True, "id": "post-123", "media_id": media_id}
 
-    monkeypatch.setattr(api, "download_video_bytes", fake_download_video_bytes)
-    monkeypatch.setattr(api, "x_oauth1_env_session", lambda: env_session)
-    monkeypatch.setattr(api, "upload_x_video_bytes", fake_upload_x_video_bytes)
-    monkeypatch.setattr(api, "create_x_post", fake_create_x_post)
-    monkeypatch.setattr(api, "upload_x_video_bytes_oauth2", lambda *args, **kwargs: pytest.fail("oauth2 upload should not run"))
+    monkeypatch.setattr(x_api, "download_video_bytes", fake_download_video_bytes)
+    monkeypatch.setattr(x_api, "x_oauth1_env_session", lambda: env_session)
+    monkeypatch.setattr(x_api, "upload_x_video_bytes", fake_upload_x_video_bytes)
+    monkeypatch.setattr(x_api, "create_x_post", fake_create_x_post)
+    monkeypatch.setattr(x_api, "upload_x_video_bytes_oauth2", lambda *args, **kwargs: pytest.fail("oauth2 upload should not run"))
 
-    result = asyncio.run(api.upload_and_post_top_sword_video("caption", "https://example.test/sword.mp4"))
+    result = asyncio.run(x_api.upload_and_post_top_sword_video("caption", "https://example.test/sword.mp4"))
 
     assert result["posted"] is True
     assert result["media_id"] == "media-123"
@@ -360,25 +431,128 @@ def test_oauth2_refresh_caches_granted_scope(monkeypatch):
         "X_CLIENT_SECRET": "client-secret",
         "X_OAUTH2_REFRESH_TOKEN": "refresh-token",
     }
-    api.X_OAUTH2_TOKEN_CACHE.clear()
-    monkeypatch.setattr(api, "get_env", lambda name, default=None: env.get(name, default))
-    monkeypatch.setattr(api.httpx, "AsyncClient", Client)
+    x_api.X_OAUTH2_TOKEN_CACHE.clear()
+    monkeypatch.setattr(x_api, "get_env", lambda name, default=None: env.get(name, default))
+    monkeypatch.setattr(x_api.httpx, "AsyncClient", Client)
 
-    access_token = asyncio.run(api.refresh_x_oauth2_access_token())
+    access_token = asyncio.run(x_api.refresh_x_oauth2_access_token())
 
     assert access_token == "new-access"
-    assert api.X_OAUTH2_TOKEN_CACHE["scope"] == "tweet.read tweet.write media.write offline.access users.read"
-    api.X_OAUTH2_TOKEN_CACHE.clear()
+    assert x_api.X_OAUTH2_TOKEN_CACHE["scope"] == "tweet.read tweet.write media.write offline.access users.read"
+    x_api.X_OAUTH2_TOKEN_CACHE.clear()
 
 
 def test_x_draft_endpoint_is_disabled_without_oauth2_token(monkeypatch):
-    monkeypatch.setattr(api, "get_env", lambda name, default=None: default)
+    monkeypatch.setattr(x_api, "get_env", lambda name, default=None: default)
 
-    with pytest.raises(api.HTTPException) as exc:
-        asyncio.run(api.draft_x_post(ShareDraftRequest(date="2026-05-06")))
+    class Request:
+        headers = {}
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(api.draft_x_post(Request(), ShareDraftRequest(date="2026-05-06")))
 
     assert exc.value.status_code == 503
     assert "OAuth2 token" in exc.value.detail
+
+
+def test_x_draft_endpoint_uses_template_without_admin_token(monkeypatch):
+    env = {
+        "X_OAUTH2_ACCESS_TOKEN": "access-token",
+        "SWORDFINDER_ADMIN_TOKEN": "admin-token",
+    }
+    async def fail_xai(*args, **kwargs):
+        pytest.fail("xAI should not be called without an admin token")
+
+    monkeypatch.setattr(x_api, "get_env", lambda name, default=None: env.get(name, default))
+    monkeypatch.setattr(api, "fetch_daily_slate_rows", lambda date, limit: SAMPLE_ROWS)
+    monkeypatch.setattr(x_api, "request_xai_post_draft", fail_xai)
+
+    class Request:
+        headers = {}
+
+    result = asyncio.run(api.draft_x_post(Request(), ShareDraftRequest(date="2026-05-06")))
+
+    assert result["source"] == "template"
+    assert result["model"] is None
+    assert "Corey Seager" in result["draft"]
+    assert "https://swordfinder.com/?date=2026-05-06" in result["share_text"]
+
+
+def test_x_draft_endpoint_uses_xai_with_admin_token(monkeypatch):
+    env = {
+        "X_OAUTH2_ACCESS_TOKEN": "access-token",
+        "SWORDFINDER_ADMIN_TOKEN": "admin-token",
+    }
+
+    async def fake_xai(draft_request, rows):
+        return {"source": "xai", "date": draft_request.date, "row_count": len(rows)}
+
+    monkeypatch.setattr(x_api, "get_env", lambda name, default=None: env.get(name, default))
+    monkeypatch.setattr(api, "fetch_daily_slate_rows", lambda date, limit: SAMPLE_ROWS)
+    monkeypatch.setattr(x_api, "request_xai_post_draft", fake_xai)
+
+    class Request:
+        headers = {"Authorization": "Bearer admin-token"}
+
+    result = asyncio.run(api.draft_x_post(Request(), ShareDraftRequest(date="2026-05-06")))
+
+    assert result == {"source": "xai", "date": "2026-05-06", "row_count": 2}
+
+
+def test_post_to_x_requires_admin_for_server_token(monkeypatch):
+    env = {
+        "X_OAUTH2_ACCESS_TOKEN": "access-token",
+        "SWORDFINDER_ADMIN_TOKEN": "admin-token",
+    }
+    monkeypatch.setattr(x_api, "get_env", lambda name, default=None: env.get(name, default))
+
+    class Request:
+        cookies = {}
+        headers = {}
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(api.post_to_x(Request(), XPostRequest(text="draft")))
+
+    assert exc.value.status_code == 403
+    assert "admin token" in exc.value.detail
+
+
+def test_post_to_x_uses_browser_session_without_admin(monkeypatch):
+    env = {
+        "X_OAUTH2_ACCESS_TOKEN": "access-token",
+        "SWORDFINDER_ADMIN_TOKEN": "admin-token",
+    }
+    session_id, _ = create_x_session(
+        {
+            "oauth_token": "browser-token",
+            "oauth_token_secret": "browser-secret",
+            "screen_name": "browser_user",
+            "user_id": "123",
+        }
+    )
+    calls = []
+
+    async def fake_create_x_post(text, session, media_id=None):
+        calls.append((text, session["oauth_token"], media_id))
+        return {"posted": True, "id": "post-123", "url": "https://x.com/browser_user/status/post-123"}
+
+    async def fail_oauth2(*args, **kwargs):
+        pytest.fail("server OAuth2 token should not be used when a browser session exists")
+
+    monkeypatch.setattr(x_api, "get_env", lambda name, default=None: env.get(name, default))
+    monkeypatch.setattr(x_api, "create_x_post", fake_create_x_post)
+    monkeypatch.setattr(x_api, "create_x_post_oauth2", fail_oauth2)
+
+    class Request:
+        cookies = {X_OAUTH_COOKIE_NAME: session_id}
+        headers = {}
+
+    result = asyncio.run(api.post_to_x(Request(), XPostRequest(text="draft")))
+
+    assert result["posted"] is True
+    assert result["screen_name"] == "browser_user"
+    assert calls == [("draft", "browser-token", None)]
+    X_OAUTH_SESSIONS.clear()
 
 
 def test_top_sword_post_falls_back_to_link_when_media_upload_disabled(monkeypatch):
@@ -386,11 +560,13 @@ def test_top_sword_post_falls_back_to_link_when_media_upload_disabled(monkeypatc
         "X_OAUTH2_ACCESS_TOKEN": "access-token",
         "X_SCREEN_NAME": "joewilsonai",
         "X_MEDIA_UPLOAD_ENABLED": "false",
+        "SWORDFINDER_ADMIN_TOKEN": "admin-token",
     }
     posted = {}
 
     class Request:
         cookies = {}
+        headers = {"Authorization": "Bearer admin-token"}
 
     async def fake_create_x_post_oauth2(text, access_token, media_id=None):
         posted["text"] = text
@@ -404,10 +580,10 @@ def test_top_sword_post_falls_back_to_link_when_media_upload_disabled(monkeypatc
             "media_id": media_id,
         }
 
-    monkeypatch.setattr(api, "get_env", lambda name, default=None: env.get(name, default))
+    monkeypatch.setattr(x_api, "get_env", lambda name, default=None: env.get(name, default))
     monkeypatch.setattr(api, "fetch_daily_slate_rows", lambda date, limit: [SAMPLE_ROWS[0]])
-    monkeypatch.setattr(api, "create_x_post_oauth2", fake_create_x_post_oauth2)
-    monkeypatch.setattr(api, "upload_and_post_top_sword_video", lambda *args, **kwargs: pytest.fail("native upload should not run"))
+    monkeypatch.setattr(x_api, "create_x_post_oauth2", fake_create_x_post_oauth2)
+    monkeypatch.setattr(x_api, "upload_and_post_top_sword_video", lambda *args, **kwargs: pytest.fail("native upload should not run"))
 
     result = asyncio.run(api.post_top_sword_to_x(Request(), TopSwordPostRequest(date="2026-05-06")))
 
@@ -417,6 +593,26 @@ def test_top_sword_post_falls_back_to_link_when_media_upload_disabled(monkeypatc
     assert posted["access_token"] == "access-token"
     assert posted["media_id"] is None
     assert "https://swordfinder.com/api/watch/top-sword?date=2026-05-06&rank=1" in posted["text"]
+
+
+def test_top_sword_post_requires_admin_token(monkeypatch):
+    env = {
+        "X_OAUTH2_ACCESS_TOKEN": "access-token",
+        "X_SCREEN_NAME": "joewilsonai",
+        "SWORDFINDER_ADMIN_TOKEN": "admin-token",
+    }
+
+    class Request:
+        cookies = {}
+        headers = {}
+
+    monkeypatch.setattr(x_api, "get_env", lambda name, default=None: env.get(name, default))
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(api.post_top_sword_to_x(Request(), TopSwordPostRequest(date="2026-05-06")))
+
+    assert exc.value.status_code == 403
+    assert "admin token" in exc.value.detail
 
 
 def test_oauth2_video_upload_uses_v2_media_endpoints(monkeypatch):
@@ -455,9 +651,9 @@ def test_oauth2_video_upload_uses_v2_media_endpoints(monkeypatch):
             calls.append({"method": "GET", "url": url, "headers": headers, "params": params})
             return Response(200, {"data": {"id": "media-123"}})
 
-    monkeypatch.setattr(api.httpx, "AsyncClient", Client)
+    monkeypatch.setattr(x_api.httpx, "AsyncClient", Client)
 
-    result = asyncio.run(api.upload_x_video_bytes_oauth2(b"video-bytes", "video/mp4", "oauth2-token"))
+    result = asyncio.run(x_api.upload_x_video_bytes_oauth2(b"video-bytes", "video/mp4", "oauth2-token"))
 
     assert result["media_id"] == "media-123"
     assert calls[0]["url"] == "https://api.x.com/2/media/upload/initialize"
@@ -507,10 +703,10 @@ def test_oauth2_video_upload_polls_v2_status_by_media_id(monkeypatch):
     async def noop_sleep(seconds):
         return None
 
-    monkeypatch.setattr(api.httpx, "AsyncClient", Client)
-    monkeypatch.setattr(api.asyncio, "sleep", noop_sleep)
+    monkeypatch.setattr(x_api.httpx, "AsyncClient", Client)
+    monkeypatch.setattr(x_api.asyncio, "sleep", noop_sleep)
 
-    result = asyncio.run(api.upload_x_video_bytes_oauth2(b"video-bytes", "video/mp4", "oauth2-token"))
+    result = asyncio.run(x_api.upload_x_video_bytes_oauth2(b"video-bytes", "video/mp4", "oauth2-token"))
     status_calls = [call for call in calls if call["method"] == "GET"]
 
     assert result["media_id"] == "media-123"
@@ -554,11 +750,11 @@ def test_upload_x_video_retries_init_without_media_category_after_forbidden(monk
         async def get(self, url, headers=None):
             return Response(200, {})
 
-    monkeypatch.setattr(api.httpx, "AsyncClient", Client)
-    monkeypatch.setattr(api, "x_user_auth_header", lambda *args, **kwargs: "OAuth test")
+    monkeypatch.setattr(x_api.httpx, "AsyncClient", Client)
+    monkeypatch.setattr(x_api, "x_user_auth_header", lambda *args, **kwargs: "OAuth test")
 
     result = asyncio.run(
-        api.upload_x_video_bytes(
+        x_api.upload_x_video_bytes(
             b"video-bytes",
             "video/mp4",
             {"oauth_token": "token", "oauth_token_secret": "secret"},
@@ -622,7 +818,7 @@ def test_x_oauth_authorize_url_targets_x_authorization():
 
 def test_store_x_oauth_request_tracks_request_secret_and_return(monkeypatch):
     X_OAUTH_REQUESTS.clear()
-    monkeypatch.setattr("api.time.time", lambda: 1000)
+    monkeypatch.setattr("api_services.x_sharing.time.time", lambda: 1000)
 
     token = store_x_oauth_request(
         {"oauth_token": "request-token", "oauth_token_secret": "request-secret"},

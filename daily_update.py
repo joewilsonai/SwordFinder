@@ -286,8 +286,8 @@ def update_percentiles_for_date(date_str: str) -> bool:
         supabase = create_client(supabase_url, supabase_key)
         updater = DailyPercentileUpdater(supabase)
         
-        # Load or create distribution cache
-        updater.load_or_create_distribution_cache()
+        # Load or create a season-scoped distribution cache.
+        updater.load_or_create_distribution_cache(year=int(date_str[:4]))
         
         # Update percentiles for the given date
         count = updater.update_daily_percentiles(date_str)

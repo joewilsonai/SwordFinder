@@ -79,7 +79,7 @@ Notes:
 
 ## GitHub Actions Audit
 
-Repository: `PoliTwit1984/SwordFinder`
+Repository: `joewilsonai/SwordFinder`
 
 Workflows discovered:
 - `Daily MLB Data Update` (`.github/workflows/daily-update.yml`)

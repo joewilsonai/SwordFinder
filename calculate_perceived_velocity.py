@@ -65,7 +65,7 @@ def add_perceived_velocity_column():
     try:
         supabase.rpc('execute_sql', {'query': sql}).execute()
         logger.info("Added perceived velocity columns")
-    except:
+    except Exception:
         logger.info("Columns may already exist")
 
 def process_perceived_velocity_batch(supabase, offset, batch_size=1000):

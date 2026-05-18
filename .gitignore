@@ -109,6 +109,7 @@ Desktop.ini
 .mypy_cache/
 .dmypy.json
 dmypy.json
+percentile_distributions_cache*.json
 
 # Documentation builds
 docs/_build/

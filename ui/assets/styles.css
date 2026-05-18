@@ -16,6 +16,10 @@
   box-sizing: border-box;
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   font-family: 'Barlow Condensed', sans-serif;
   background:
@@ -23,7 +27,9 @@ body {
     radial-gradient(900px 500px at -10% -20%, rgba(255, 255, 255, 0.08), transparent 55%),
     var(--bg);
   color: var(--ink);
+  font-size: 16px;
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 .brand-title {
@@ -34,6 +40,7 @@ body {
 .app-brand {
   color: var(--ink);
   min-width: 0;
+  min-height: 48px;
 }
 
 .brand-mark {
@@ -61,6 +68,7 @@ body {
 
 .hero-glow {
   position: relative;
+  overflow: hidden;
 }
 
 .hero-glow::after {
@@ -251,6 +259,34 @@ body {
   transition: color 180ms ease;
 }
 
+.app-nav {
+  flex-shrink: 0;
+}
+
+.app-nav .app-link,
+.tap-target,
+button.primary,
+button.secondary,
+a.secondary,
+.ops-date-input,
+.x-pin-input {
+  align-items: center;
+  display: inline-flex;
+  justify-content: center;
+  min-height: 48px;
+}
+
+.app-nav .app-link {
+  min-width: 48px;
+  padding-inline: 0.25rem;
+}
+
+.ops-date-input,
+.x-pin-input,
+.x-draft-textarea {
+  font-size: 16px;
+}
+
 .app-link:hover,
 .app-link.active {
   color: var(--accent-soft);
@@ -271,14 +307,43 @@ button.primary:disabled {
   opacity: 0.72;
 }
 
-button.secondary {
+button.secondary,
+a.secondary {
   border: 1px solid var(--line);
   color: var(--ink);
   background: rgba(255, 255, 255, 0.02);
 }
 
-button.secondary:hover {
+button.secondary:hover,
+a.secondary:hover {
   border-color: #575757;
+}
+
+button.primary,
+button.secondary,
+a.secondary {
+  font-size: 0.875rem;
+  line-height: 1.15;
+}
+
+@media (max-width: 480px) {
+  .brand-mark {
+    height: 2rem;
+    width: 2rem;
+  }
+
+  .app-brand .brand-title {
+    font-size: 1.75rem;
+    letter-spacing: 0.1em;
+  }
+
+  .app-nav {
+    gap: 0.25rem;
+  }
+
+  .app-nav .app-link {
+    padding-inline: 0.25rem;
+  }
 }
 
 .loading-dots::after {

@@ -8,7 +8,7 @@ SwordFinder surfaces "sword" swings — awkward two-strike whiffs with bad bat s
 
 [![Live](https://img.shields.io/badge/Live-swordfinder.com-22c55e)](https://swordfinder.com)
 [![Ops](https://img.shields.io/badge/Ops-/ops-d97757)](https://swordfinder.com/ops)
-[![Stack](https://img.shields.io/badge/Stack-Next.js_+_FastAPI-000000)]()
+[![Stack](https://img.shields.io/badge/Stack-Static_JS_+_FastAPI-000000)]()
 [![License](https://img.shields.io/badge/License-MIT-blue)](#license)
 
 [**🔗 Try it →**](https://swordfinder.com)
@@ -67,7 +67,7 @@ flowchart LR
 
 ## Stack
 
-- **UI:** Next.js (App Router) + TypeScript + Tailwind — deployed on **Vercel**
+- **UI:** Static vanilla JavaScript + Tailwind CDN — deployed on **Vercel**
 - **API:** FastAPI (Python) — deployed on **Railway**
 - **Data:** Supabase Postgres (`mlb_pitches_enhanced` table)
 - **Video:** Azure Blob Storage (`swordfinder-videos` container)
@@ -75,14 +75,17 @@ flowchart LR
 - **AI:** xAI Grok for post drafts
 - **Social:** X API v2 with OAuth1 native-video upload
 
+Server-side xAI/X posting endpoints are operator-gated with `SWORDFINDER_ADMIN_TOKEN`;
+public share drafts fall back to a non-AI template.
+
 ## Run locally
 
 This is a production product, not a starter template — but if you want to fork and run your own version, the major moving parts are:
 
 - `daily-update.yml` — fetches yesterday's Statcast and upserts pitch rows
 - `process-daily-videos.yml` — pulls clips for top-N swings into Azure Blob
-- `api/` — FastAPI service with `/picks`, `/profile/<player>`, `/ops/*` endpoints
-- `ui/` — Next.js front-end
+- `api.py` — FastAPI service with `/daily-slate`, `/profiles/*`, `/data/*`, `/share/x/*`, and `/ops/*` endpoints
+- `ui/` — static vanilla JavaScript front-end
 
 See `.github/workflows/` for the daily orchestration.
 

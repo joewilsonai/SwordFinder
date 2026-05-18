@@ -12,11 +12,26 @@ from supabase import create_client
 from dotenv import load_dotenv
 import logging
 import json
-from scipy import stats
 from env_config import get_env
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+PERCENTILE_POINTS = [1, 5, 10, 25, 50, 75, 90, 95, 99]
+DIST_FIELDS = [
+    "id",
+    "pitch_type",
+    "release_speed",
+    "release_spin_rate",
+    "pfx_x",
+    "pfx_z",
+    "bat_speed",
+    "sword_score",
+    "release_extension",
+    "perceived_velocity",
+]
+
 
 class DailyPercentileUpdater:
     def __init__(self, supabase_client):
@@ -24,9 +39,17 @@ class DailyPercentileUpdater:
         self.distributions = {}
         self.distribution_stats = {}
         
-    def load_or_create_distribution_cache(self):
+    @staticmethod
+    def cache_file_for_year(year=None) -> str:
+        return (
+            f"percentile_distributions_cache_{year}.json"
+            if year is not None
+            else "percentile_distributions_cache.json"
+        )
+
+    def load_or_create_distribution_cache(self, year=None):
         """Load cached distribution statistics or create them"""
-        cache_file = 'percentile_distributions_cache.json'
+        cache_file = self.cache_file_for_year(year)
         
         if os.path.exists(cache_file):
             # Check if cache is recent (within 7 days)
@@ -38,7 +61,7 @@ class DailyPercentileUpdater:
                 return True
         
         logger.info("Building distribution cache from database...")
-        self.build_distribution_cache()
+        self.build_distribution_cache(year=year)
         
         # Save cache
         with open(cache_file, 'w') as f:
@@ -46,8 +69,39 @@ class DailyPercentileUpdater:
         
         return True
     
-    def build_distribution_cache(self):
+    def build_distribution_cache(self, year=None):
         """Build percentile lookup tables from existing data"""
+        try:
+            self.build_distribution_cache_from_query_rpc(year=year)
+        except Exception as exc:
+            if not self.is_missing_query_rpc_error(exc):
+                raise
+            logger.warning(
+                "execute_sql_query RPC is unavailable; building percentile "
+                "distributions through Supabase table reads instead."
+            )
+            self.build_distribution_cache_from_table_rows(year=year)
+
+    @staticmethod
+    def is_missing_query_rpc_error(exc: Exception) -> bool:
+        message = str(exc)
+        return "execute_sql_query" in message and (
+            "Could not find the function" in message
+            or "PGRST202" in message
+            or "not found" in message.lower()
+        )
+
+    def execute_query_sql(self, sql: str):
+        return self.supabase.rpc('execute_sql_query', {'query': sql}).execute()
+
+    @staticmethod
+    def year_where_clause(year=None, prefix: str = "AND") -> str:
+        if year is None:
+            return ""
+        return f" {prefix} game_date >= '{year}-01-01' AND game_date < '{year + 1}-01-01'"
+
+    def build_distribution_cache_from_query_rpc(self, year=None):
+        """Build percentile lookup tables with the optional SQL query RPC."""
         
         # Get percentile values for each metric
         metrics = [
@@ -59,7 +113,7 @@ class DailyPercentileUpdater:
         ]
         
         # Also need movement distributions
-        movement_sql = """
+        movement_sql = f"""
         SELECT 
             PERCENTILE_CONT(0.01) WITHIN GROUP (ORDER BY SQRT(POWER(pfx_x, 2) + POWER(pfx_z, 2))) as p1,
             PERCENTILE_CONT(0.05) WITHIN GROUP (ORDER BY SQRT(POWER(pfx_x, 2) + POWER(pfx_z, 2))) as p5,
@@ -73,14 +127,15 @@ class DailyPercentileUpdater:
             COUNT(*) as count
         FROM mlb_pitches_enhanced
         WHERE pfx_x IS NOT NULL AND pfx_z IS NOT NULL
+        {self.year_where_clause(year)}
         """
         
-        result = self.supabase.rpc('execute_sql_query', {'query': movement_sql}).execute()
+        result = self.execute_query_sql(movement_sql)
         if result.data:
             self.distribution_stats['movement_overall'] = result.data[0]
         
         # Movement by pitch type
-        movement_by_type_sql = """
+        movement_by_type_sql = f"""
         SELECT 
             pitch_type,
             PERCENTILE_CONT(0.01) WITHIN GROUP (ORDER BY SQRT(POWER(pfx_x, 2) + POWER(pfx_z, 2))) as p1,
@@ -95,11 +150,12 @@ class DailyPercentileUpdater:
             COUNT(*) as count
         FROM mlb_pitches_enhanced
         WHERE pfx_x IS NOT NULL AND pfx_z IS NOT NULL AND pitch_type IS NOT NULL
+        {self.year_where_clause(year)}
         GROUP BY pitch_type
         HAVING COUNT(*) >= 100
         """
         
-        result = self.supabase.rpc('execute_sql_query', {'query': movement_by_type_sql}).execute()
+        result = self.execute_query_sql(movement_by_type_sql)
         if result.data:
             for row in result.data:
                 pt = row['pitch_type']
@@ -127,8 +183,9 @@ class DailyPercentileUpdater:
             
             if field == 'bat_speed':
                 sql += " AND bat_speed > 0"
+            sql += self.year_where_clause(year)
             
-            result = self.supabase.rpc('execute_sql_query', {'query': sql}).execute()
+            result = self.execute_query_sql(sql)
             if result.data:
                 self.distribution_stats[f'{prefix}_overall'] = result.data[0]
             
@@ -149,15 +206,132 @@ class DailyPercentileUpdater:
                     COUNT(*) as count
                 FROM mlb_pitches_enhanced
                 WHERE {field} IS NOT NULL AND pitch_type IS NOT NULL
+                {self.year_where_clause(year)}
                 GROUP BY pitch_type
                 HAVING COUNT(*) >= 100
                 """
                 
-                result = self.supabase.rpc('execute_sql_query', {'query': sql}).execute()
+                result = self.execute_query_sql(sql_by_type)
                 if result.data:
                     for row in result.data:
                         pt = row['pitch_type']
                         self.distribution_stats[f'{prefix}_{pt}'] = row
+
+    @staticmethod
+    def distribution_stats_from_series(series: pd.Series, include_moments: bool = True):
+        """Return PERCENTILE_CONT-like stats for one numeric distribution."""
+        clean = pd.to_numeric(series, errors="coerce").dropna()
+        if clean.empty:
+            return None
+
+        stats_row = {
+            f"p{point}": float(clean.quantile(point / 100.0))
+            for point in PERCENTILE_POINTS
+        }
+        stats_row["count"] = int(clean.count())
+        if include_moments:
+            stats_row["mean"] = float(clean.mean())
+            stddev = clean.std()
+            stats_row["stddev"] = float(stddev) if pd.notna(stddev) else 0.0
+        return stats_row
+
+    def fetch_distribution_rows(self, page_size: int = 5000, year=None) -> list:
+        """Load fields needed to build percentile distributions without SQL RPC."""
+        rows = []
+        last_id = None
+
+        while True:
+            query = (
+                self.supabase.table("mlb_pitches_enhanced")
+                .select(",".join(DIST_FIELDS))
+                .order("id")
+            )
+            if year is not None:
+                query = query.gte("game_date", f"{year}-01-01").lt(
+                    "game_date",
+                    f"{year + 1}-01-01",
+                )
+            if last_id is not None:
+                query = query.gt("id", last_id)
+
+            result = query.range(0, page_size - 1).execute()
+            page = result.data or []
+            if not page:
+                break
+
+            rows.extend(page)
+            last_id = page[-1].get("id")
+            logger.info("Loaded %s rows for percentile distribution cache", len(rows))
+
+            if len(page) < page_size:
+                break
+
+        return rows
+
+    def build_distribution_cache_from_table_rows(self, year=None):
+        """Build distribution stats from Supabase REST rows when query RPC is absent."""
+        rows = self.fetch_distribution_rows(year=year)
+        df = pd.DataFrame(rows)
+        if df.empty:
+            logger.warning("No rows available for percentile distribution cache")
+            return
+
+        for col in DIST_FIELDS:
+            if col in {"id", "pitch_type"}:
+                continue
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+
+        df["movement_total"] = np.sqrt((df["pfx_x"] ** 2) + (df["pfx_z"] ** 2))
+
+        movement = self.distribution_stats_from_series(df["movement_total"], include_moments=False)
+        if movement:
+            self.distribution_stats["movement_overall"] = movement
+
+        movement_rows = df[df["movement_total"].notna() & df["pitch_type"].notna()]
+        for pitch_type, group in movement_rows.groupby("pitch_type"):
+            if len(group) < 100:
+                continue
+            stats_row = self.distribution_stats_from_series(
+                group["movement_total"],
+                include_moments=False,
+            )
+            if stats_row:
+                stats_row["pitch_type"] = pitch_type
+                self.distribution_stats[f"movement_{pitch_type}"] = stats_row
+
+        metrics = [
+            ("release_speed", "velo"),
+            ("release_spin_rate", "spin"),
+            ("bat_speed", "bat_speed"),
+            ("release_extension", "extension"),
+            ("perceived_velocity", "perceived_velo"),
+        ]
+
+        for field, prefix in metrics:
+            values = df[field]
+            if field == "bat_speed":
+                values = values[values > 0]
+
+            stats_row = self.distribution_stats_from_series(values)
+            if stats_row:
+                self.distribution_stats[f"{prefix}_overall"] = stats_row
+
+            if field == "bat_speed":
+                continue
+
+            grouped = df[df[field].notna() & df["pitch_type"].notna()]
+            for pitch_type, group in grouped.groupby("pitch_type"):
+                if len(group) < 100:
+                    continue
+                stats_row = self.distribution_stats_from_series(group[field], include_moments=False)
+                if stats_row:
+                    stats_row["pitch_type"] = pitch_type
+                    self.distribution_stats[f"{prefix}_{pitch_type}"] = stats_row
+
+        sword_values = df[(df["bat_speed"] > 0) & (df["sword_score"] > 0)]["bat_speed"]
+        sword_stats = self.distribution_stats_from_series(sword_values, include_moments=False)
+        if sword_stats:
+            self.distribution_stats["bat_speed_sword"] = sword_stats
     
     def estimate_percentile(self, value, dist_key):
         """Estimate percentile using cached distribution statistics"""
@@ -329,9 +503,26 @@ class DailyPercentileUpdater:
         WHERE bat_speed > 0 AND sword_score > 0
         """
         
-        result = self.supabase.rpc('execute_sql_query', {'query': sql}).execute()
-        if result.data:
-            self.distribution_stats['bat_speed_sword'] = result.data[0]
+        try:
+            result = self.execute_query_sql(sql)
+            if result.data:
+                self.distribution_stats['bat_speed_sword'] = result.data[0]
+        except Exception as exc:
+            if not self.is_missing_query_rpc_error(exc):
+                raise
+            rows = self.fetch_distribution_rows()
+            df = pd.DataFrame(rows)
+            if df.empty:
+                return
+            df["bat_speed"] = pd.to_numeric(df["bat_speed"], errors="coerce")
+            df["sword_score"] = pd.to_numeric(df["sword_score"], errors="coerce")
+            sword_values = df[(df["bat_speed"] > 0) & (df["sword_score"] > 0)]["bat_speed"]
+            sword_stats = self.distribution_stats_from_series(
+                sword_values,
+                include_moments=False,
+            )
+            if sword_stats:
+                self.distribution_stats["bat_speed_sword"] = sword_stats
     
     def refresh_cache_weekly(self):
         """Refresh the distribution cache weekly"""
@@ -361,9 +552,6 @@ def main():
     print("📊 Daily Percentile Updater")
     print("=" * 50)
     
-    # Load or create cache
-    updater.load_or_create_distribution_cache()
-    
     # Update yesterday's data by default
     yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
     
@@ -373,6 +561,9 @@ def main():
         date_to_update = sys.argv[1]
     else:
         date_to_update = yesterday
+
+    # Load or create a cache scoped to the season being updated.
+    updater.load_or_create_distribution_cache(year=int(date_to_update[:4]))
     
     print(f"\n📅 Updating percentiles for: {date_to_update}")
     

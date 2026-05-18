@@ -58,6 +58,7 @@ let currentXShareText = '';
 let isXConnected = false;
 let xScreenName = '';
 let xMediaUploadEnabled = true;
+let canPostTopSwordDirectly = false;
 let pendingXOAuthToken = '';
 
 function isCompleteDate(value) {
@@ -194,7 +195,7 @@ function setXDraftControls(draft = '', shareText = '') {
   const hasDraft = Boolean(currentXShareText.trim());
   copyXDraftButton.disabled = !hasDraft;
   postXNowButton.disabled = !hasDraft || !isXConnected;
-  postTopSwordVideoButton.disabled = !isXConnected || !currentSlateDate;
+  postTopSwordVideoButton.disabled = !canPostTopSwordDirectly || !currentSlateDate;
   postTopSwordVideoButton.textContent = xMediaUploadEnabled ? 'Post #1 Video' : 'Post #1 Link';
   postTopSwordVideoButton.title = xMediaUploadEnabled
     ? 'Post the #1 sword with native X video.'
@@ -217,6 +218,7 @@ function resetXDraftPanel() {
   currentXShareText = '';
   pendingXOAuthToken = '';
   xMediaUploadEnabled = true;
+  canPostTopSwordDirectly = false;
   xDraftMeta.textContent = 'Ready for selected slate';
   xDraftStatus.textContent = '';
   setXDraftControls('');
@@ -230,7 +232,7 @@ function renderXConnectionStatus() {
     : 'Connect X';
   connectXButton.disabled = isXConnected;
   postXNowButton.disabled = !isXConnected || !currentXShareText;
-  postTopSwordVideoButton.disabled = !isXConnected || !currentSlateDate;
+  postTopSwordVideoButton.disabled = !canPostTopSwordDirectly || !currentSlateDate;
   postTopSwordVideoButton.textContent = xMediaUploadEnabled ? 'Post #1 Video' : 'Post #1 Link';
   postTopSwordVideoButton.title = xMediaUploadEnabled
     ? 'Post the #1 sword with native X video.'
@@ -274,6 +276,11 @@ async function refreshXConnectionStatus() {
     isXConnected = Boolean(status.connected);
     xScreenName = status.screen_name || '';
     xMediaUploadEnabled = status.media_upload_enabled !== false;
+    canPostTopSwordDirectly = Boolean(
+      status.connected &&
+      !status.admin_required &&
+      status.auth_mode !== 'oauth1_browser_session'
+    );
     renderXConnectionStatus();
     return status;
   } catch (error) {
@@ -281,6 +288,7 @@ async function refreshXConnectionStatus() {
     isXConnected = false;
     xScreenName = '';
     xMediaUploadEnabled = false;
+    canPostTopSwordDirectly = false;
     renderXConnectionStatus();
     return null;
   }

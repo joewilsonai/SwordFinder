@@ -50,7 +50,7 @@ def get_play_id_for_pitch(game_pk, pitcher_id, batter_id, inning, inning_topbot)
                         return event['playId']
         
         return None
-    except:
+    except Exception:
         return None
 
 def get_play_ids_for_pitches(pitches_df):

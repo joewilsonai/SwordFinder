@@ -8,7 +8,7 @@ export function mountNav(active = 'home') {
         <img class="brand-mark" src="/assets/brand/swordfinder-mark-white.png" alt="" />
         <span class="brand-title text-3xl tracking-[0.14em]">SwordFinder</span>
       </a>
-      <div class="flex items-center gap-4 text-sm uppercase tracking-[0.09em] md:gap-6">
+      <div class="app-nav flex items-center gap-2 text-sm uppercase tracking-[0.09em] md:gap-6">
         <a class="app-link ${active === 'home' ? 'active' : ''}" href="/index.html">Home</a>
         <a class="app-link ${active === 'leaderboards' ? 'active' : ''}" href="/leaderboards.html">Leaderboards</a>
         <a class="app-link ${active === 'ops' ? 'active' : ''}" href="/ops.html">Ops</a>

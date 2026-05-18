@@ -2,7 +2,7 @@
 
 Repository:
 
-- `https://github.com/PoliTwit1984/SwordFinder`
+- `https://github.com/joewilsonai/SwordFinder`
 
 The repo is already initialized, connected to `origin`, and deployed from `main`.
 
@@ -30,16 +30,16 @@ Do not commit `.env`, API keys, CSV exports, local videos, logs, or `.venv`.
 Manual workflow checks:
 
 ```bash
-gh workflow list --repo PoliTwit1984/SwordFinder
-gh run list --repo PoliTwit1984/SwordFinder --limit 10
+gh workflow list --repo joewilsonai/SwordFinder
+gh run list --repo joewilsonai/SwordFinder --limit 10
 ```
 
 Manual dispatch examples:
 
 ```bash
-gh workflow run "Daily MLB Data Update" --repo PoliTwit1984/SwordFinder --ref main
-gh workflow run "Process Daily Sword Videos" --repo PoliTwit1984/SwordFinder --ref main
-gh workflow run "Production Smoke Check" --repo PoliTwit1984/SwordFinder --ref main
+gh workflow run "Daily MLB Data Update" --repo joewilsonai/SwordFinder --ref main
+gh workflow run "Process Daily Sword Videos" --repo joewilsonai/SwordFinder --ref main
+gh workflow run "Production Smoke Check" --repo joewilsonai/SwordFinder --ref main
 ```
 
 ## Workflow File Pushes

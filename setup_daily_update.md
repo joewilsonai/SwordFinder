@@ -33,8 +33,8 @@ PROCESS_DATE_OVERRIDE=2026-03-24 python process_daily_sword_videos.py
 ## Monitoring
 
 ```bash
-gh run list --repo PoliTwit1984/SwordFinder --limit 10
-gh run view <run-id> --repo PoliTwit1984/SwordFinder
+gh run list --repo joewilsonai/SwordFinder --limit 10
+gh run view <run-id> --repo joewilsonai/SwordFinder
 ```
 
 Use logs/artifacts from the Actions run first. Local logs such as `daily_update.log` and `video_processing.log` are ignored and should not be committed.

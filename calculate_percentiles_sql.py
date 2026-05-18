@@ -198,7 +198,7 @@ def main():
         try:
             run_percentile_update(supabase, 'perceived_velocity', 'perceived_velo_percentile_overall', year=args.year)
             run_pitch_type_percentile(supabase, 'perceived_velocity', 'perceived_velo_percentile_pitch_type', year=args.year)
-        except:
+        except Exception:
             print("   Perceived velocity not calculated yet - run calculate_perceived_velocity.py first")
         
         print("\n✅ All percentiles calculated!")

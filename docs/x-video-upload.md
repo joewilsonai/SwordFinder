@@ -1,6 +1,6 @@
 # X Video Upload Runbook
 
-Last verified: 2026-05-09.
+Last verified: 2026-05-17.
 
 This document is about posting videos to X/Twitter. It is not about the xAI Grok API.
 
@@ -41,6 +41,14 @@ xAI does not publish an X post and does not attach media to a post. Do not use t
 ## Credentials Required
 
 For native video posting, keep these in `~/.luna/secrets/keys.env` and Railway variables. Never commit values.
+
+Operator gate for server-side posting and xAI drafts:
+
+- `SWORDFINDER_ADMIN_TOKEN` (or `X_POST_ADMIN_TOKEN`)
+
+Send it as `Authorization: Bearer <token>` or `X-SwordFinder-Admin-Token: <token>`.
+Without the admin token, public draft requests use a template draft, server-token
+status is hidden, and server-side X posting returns `403`.
 
 OAuth 1.0a video upload and media-backed post:
 
@@ -86,8 +94,10 @@ Therefore, for SwordFinder, OAuth1 is the primary video upload path.
 Dry-run the selected day's top sword without posting:
 
 ```bash
+source ~/.luna/secrets/keys.env
 curl -sS -X POST https://swordfinder-production.up.railway.app/share/x/top-sword \
   -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer ${SWORDFINDER_ADMIN_TOKEN}" \
   --data '{"date":"2026-05-06","dry_run":true}' | python3 -m json.tool
 ```
 
@@ -101,9 +111,11 @@ Expected signals:
 Post the native video:
 
 ```bash
+source ~/.luna/secrets/keys.env
 curl -sS --max-time 180 \
   -X POST https://swordfinder-production.up.railway.app/share/x/top-sword \
   -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer ${SWORDFINDER_ADMIN_TOKEN}" \
   --data '{"date":"2026-05-06"}' | python3 -m json.tool
 ```
 
@@ -118,7 +130,9 @@ Expected success signals:
 Check production auth status:
 
 ```bash
-curl -sS https://swordfinder-production.up.railway.app/share/x/oauth/status | python3 -m json.tool
+source ~/.luna/secrets/keys.env
+curl -sS https://swordfinder-production.up.railway.app/share/x/oauth/status \
+  -H "Authorization: Bearer ${SWORDFINDER_ADMIN_TOKEN}" | python3 -m json.tool
 ```
 
 Expected native-video signal:

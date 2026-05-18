@@ -40,7 +40,7 @@ AZURE_CONTAINER_NAME
 ## Useful Commands
 
 ```bash
-gh workflow list --repo PoliTwit1984/SwordFinder
-gh run list --repo PoliTwit1984/SwordFinder --limit 10
-gh run view <run-id> --repo PoliTwit1984/SwordFinder
+gh workflow list --repo joewilsonai/SwordFinder
+gh run list --repo joewilsonai/SwordFinder --limit 10
+gh run view <run-id> --repo joewilsonai/SwordFinder
 ```
