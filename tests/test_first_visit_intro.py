@@ -4,7 +4,7 @@ from pathlib import Path
 def test_shared_layout_mounts_first_visit_intro():
     source = Path("ui/assets/layout.js").read_text()
 
-    assert "swordfinder:intro:v2" in source
+    assert "swordfinder:intro:v3" in source
     assert "mountFirstVisitIntro" in source
     assert "window.localStorage.getItem" in source
     assert "window.localStorage.setItem" in source
@@ -13,7 +13,7 @@ def test_shared_layout_mounts_first_visit_intro():
     assert "What's a Sword?" in source
     assert "Spot the shape" in source
     assert "Read the score" in source
-    assert "Watch the clip" in source
+    assert "Finish the at-bat" in source
     assert "data-sword-intro-dismiss" in source
     assert "Open Sword Info" in source
     assert 'href="/sword-info.html"' in source
@@ -57,9 +57,13 @@ def test_sword_info_page_contains_lore_embeds():
     assert html.count("allowfullscreen") >= 5
     assert "Trevor Bauer" in html
     assert "Momentum" in html
+    assert "Creator Angle" in html
+    assert "Built for the shoutout" in html
+    assert 'id="copy-creator-pitch"' in html
+    assert "copyCreatorPitch" in source
     assert "mountNav('info')" in source
     assert "mountFirstVisitIntro({ force: true })" in source
-    assert "window.localStorage.removeItem('swordfinder:intro:v2')" in source
+    assert "window.localStorage.removeItem('swordfinder:intro:v3')" in source
     assert "setFooter()" in source
 
 

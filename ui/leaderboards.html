@@ -30,6 +30,16 @@
           </div>
           <button id="clear-pitch-filter" class="secondary rounded-md px-4 py-2 text-sm uppercase tracking-[0.08em]" type="button">All Pitches</button>
         </div>
+        <div id="pitch-family-rail" class="pitch-explorer mt-5">
+          <p class="text-xs uppercase tracking-[0.12em] text-zinc-500">Browse pitch families</p>
+          <div class="pitch-family-buttons mt-2" aria-label="Pitch family shortcuts">
+            <button class="secondary rounded-md px-3 py-2 text-xs uppercase tracking-[0.08em]" type="button" data-pitch-filter="">All</button>
+            <button class="secondary rounded-md px-3 py-2 text-xs uppercase tracking-[0.08em]" type="button" data-pitch-filter="family:fastballs">Fastballs</button>
+            <button class="secondary rounded-md px-3 py-2 text-xs uppercase tracking-[0.08em]" type="button" data-pitch-filter="family:breaking">Breaking</button>
+            <button class="secondary rounded-md px-3 py-2 text-xs uppercase tracking-[0.08em]" type="button" data-pitch-filter="family:offspeed">Offspeed</button>
+          </div>
+          <div id="pitch-type-chip-list" class="pitch-type-chip-list mt-3" aria-label="Available pitch type shortcuts"></div>
+        </div>
         <p id="status-text" class="mt-4 text-sm text-zinc-400 loading-dots">Loading leaderboard data</p>
       </section>
 

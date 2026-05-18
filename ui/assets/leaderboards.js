@@ -18,6 +18,8 @@ const pitcherTableBody = document.getElementById('pitcher-table-body');
 const heading = document.getElementById('leaderboard-heading');
 const pitchTypeFilter = document.getElementById('pitch-type-filter');
 const clearPitchFilterButton = document.getElementById('clear-pitch-filter');
+const pitchFamilyRail = document.getElementById('pitch-family-rail');
+const pitchTypeChipList = document.getElementById('pitch-type-chip-list');
 const rangeButtons = Array.from(document.querySelectorAll('[data-range]'));
 
 const season = latestSeasonRange();
@@ -134,6 +136,64 @@ function activePitchLabel() {
   if (pitchType) return pitchTypeLabel(pitchType);
   const family = activePitchFamily();
   return family ? family.label : 'all pitch types';
+}
+
+function normalizePitchFilter(rawValue) {
+  const value = String(rawValue || '');
+  if (value.startsWith('family:') && PITCH_FAMILY_BY_ID.has(value.slice(7))) {
+    return value;
+  }
+  if (value.startsWith('pitch:')) {
+    const code = normalizePitchType(value.slice(6));
+    return code ? `pitch:${code}` : '';
+  }
+  return '';
+}
+
+function setActivePitchFilter(rawValue) {
+  activePitchFilter = normalizePitchFilter(rawValue);
+  pitchTypeFilter.value = activePitchFilter;
+  updatePitchExplorerActiveState();
+}
+
+function updatePitchExplorerActiveState() {
+  pitchFamilyRail?.querySelectorAll('[data-pitch-filter]').forEach((button) => {
+    const isActive = button.dataset.pitchFilter === activePitchFilter;
+    button.classList.toggle('primary', isActive);
+    button.classList.toggle('secondary', !isActive);
+  });
+}
+
+function renderPitchTypeChips() {
+  if (!pitchTypeChipList) return;
+  const codes = availablePitchCodes();
+
+  if (!codes.length) {
+    pitchTypeChipList.innerHTML = '<p class="text-sm text-zinc-500">Pitch type shortcuts load with the season data.</p>';
+    return;
+  }
+
+  pitchTypeChipList.innerHTML = codes
+    .map(
+      (code) => `
+        <button class="pitch-chip secondary rounded-md px-3 py-2 text-xs uppercase tracking-[0.08em]" type="button" data-pitch-filter="pitch:${escapeHtml(code)}">
+          ${escapeHtml(pitchTypeLabel(code))}
+        </button>
+      `
+    )
+    .join('');
+  updatePitchExplorerActiveState();
+}
+
+function bindPitchExplorer() {
+  pitchFamilyRail?.addEventListener('click', async (event) => {
+    const target = event.target.closest('[data-pitch-filter]');
+    if (!target) return;
+    setActivePitchFilter(target.dataset.pitchFilter);
+    if (activePitchFilter) setActiveRange('season');
+    updateUrlState();
+    await refresh();
+  });
 }
 
 function rangeStart() {
@@ -378,6 +438,7 @@ async function fetchPitchTypeOptions() {
     '</optgroup>',
   ].join('');
   pitchTypeFilter.value = activePitchFilter;
+  renderPitchTypeChips();
 }
 
 async function fetchLeaderboardRows(start) {
@@ -448,27 +509,19 @@ rangeButtons.forEach((btn) => {
 });
 
 pitchTypeFilter.addEventListener('change', async () => {
-  const rawValue = String(pitchTypeFilter.value || '');
-  if (rawValue.startsWith('family:') && PITCH_FAMILY_BY_ID.has(rawValue.slice(7))) {
-    activePitchFilter = rawValue;
-  } else if (rawValue.startsWith('pitch:')) {
-    const code = normalizePitchType(rawValue.slice(6));
-    activePitchFilter = code ? `pitch:${code}` : '';
-  } else {
-    activePitchFilter = '';
-  }
-  pitchTypeFilter.value = activePitchFilter;
+  setActivePitchFilter(pitchTypeFilter.value);
   if (activePitchFilter) setActiveRange('season');
   updateUrlState();
   await refresh();
 });
 
 clearPitchFilterButton.addEventListener('click', async () => {
-  activePitchFilter = '';
-  pitchTypeFilter.value = '';
+  setActivePitchFilter('');
   updateUrlState();
   await refresh();
 });
+
+bindPitchExplorer();
 
 async function init() {
   try {

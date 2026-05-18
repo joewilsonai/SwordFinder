@@ -324,8 +324,10 @@ body {
 
 .info-steps article,
 .info-cta,
+.creator-angle,
 .method-card,
 .architecture-section,
+.share-card,
 .sword-detail-panel,
 .sword-detail-score {
   border: 1px solid var(--line);
@@ -337,9 +339,29 @@ body {
 }
 
 .method-card,
+.creator-angle,
+.share-card,
 .architecture-section {
   display: grid;
   gap: 1rem;
+}
+
+.share-actions,
+.pitch-family-buttons,
+.pitch-type-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.pitch-explorer {
+  border-block-start: 1px solid rgba(255, 255, 255, 0.08);
+  padding-block-start: 1rem;
+}
+
+.pitch-chip {
+  max-width: 100%;
+  text-align: center;
 }
 
 .architecture-flow {
@@ -529,6 +551,12 @@ body {
 
   .method-card {
     grid-template-columns: minmax(14rem, 0.55fr) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .creator-angle,
+  .share-card {
+    grid-template-columns: minmax(14rem, 0.6fr) minmax(0, 1fr);
     align-items: start;
   }
 
@@ -836,7 +864,8 @@ button.primary:hover {
   filter: brightness(1.08);
 }
 
-button.primary:disabled {
+button.primary:disabled,
+button.secondary:disabled {
   cursor: wait;
   opacity: 0.72;
 }

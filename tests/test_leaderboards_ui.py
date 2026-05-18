@@ -7,6 +7,11 @@ def test_leaderboards_has_pitch_type_search_control():
     assert 'id="pitch-type-filter"' in html
     assert "Search by pitch family or type" in html
     assert 'id="clear-pitch-filter"' in html
+    assert 'id="pitch-family-rail"' in html
+    assert 'data-pitch-filter="family:fastballs"' in html
+    assert 'data-pitch-filter="family:breaking"' in html
+    assert 'data-pitch-filter="family:offspeed"' in html
+    assert 'id="pitch-type-chip-list"' in html
     assert 'id="leaderboard-heading"' in html
     assert 'id="leaderboard-cards" class="grid gap-6"' in html
     assert "Top 5 By Pitch Type" in html
@@ -39,3 +44,7 @@ def test_leaderboards_shows_top_five_sections_by_pitch_type():
     assert "params.get('pitch_group')" in source
     assert "params.get('pitch_type') || params.get('pitch')" in source
     assert "url.searchParams.set('pitch_group', pitchFamily.id)" in source
+    assert "pitchFamilyRail" in source
+    assert "renderPitchTypeChips" in source
+    assert "bindPitchExplorer" in source
+    assert "data-pitch-filter" in source

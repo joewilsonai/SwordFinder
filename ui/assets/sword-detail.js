@@ -22,6 +22,12 @@ const scoreHeadline = document.getElementById('score-headline');
 const scoreBreakdown = document.getElementById('score-breakdown');
 const hitterLink = document.getElementById('hitter-link');
 const pitcherLink = document.getElementById('pitcher-link');
+const shareText = document.getElementById('sword-share-text');
+const copySwordLinkButton = document.getElementById('copy-sword-link');
+const shareSwordNativeButton = document.getElementById('share-sword-native');
+const openSwordXLink = document.getElementById('open-sword-x');
+const shareStatus = document.getElementById('sword-share-status');
+let currentSwordRow = null;
 
 function numericValue(value) {
   const number = Number(value);
@@ -37,6 +43,19 @@ function formatDescription(row) {
   const pitch = row.pitch_name || row.pitch_type || 'Pitch';
   const pitcher = row.pitcher_name || row.player_name || 'Unknown pitcher';
   return `${pitch} ${formatDecimal(row.release_speed)} mph from ${pitcher}`;
+}
+
+function buildSwordShareUrl() {
+  if (!swordId) return window.location.href;
+  return new URL(`/sword/${swordId}`, window.location.origin).toString();
+}
+
+function buildSwordShareText(row) {
+  const hitter = row?.batter_name || 'A hitter';
+  const pitcher = row?.pitcher_name || row?.player_name || 'the pitcher';
+  const pitch = row?.pitch_name || row?.pitch_type || 'pitch';
+  const scoreValue = formatDecimal(row?.sword_score);
+  return `SwordFinder: ${hitter} took a ${scoreValue} sword on a ${pitch} from ${pitcher}. No K, no sword.`;
 }
 
 function breakdownItem(label, value, detail) {
@@ -85,6 +104,60 @@ function renderBreakdown(row) {
   ].join('');
 }
 
+function updateShareCard(row) {
+  currentSwordRow = row;
+  const text = buildSwordShareText(row);
+  const url = buildSwordShareUrl();
+
+  if (shareText) shareText.textContent = text;
+  if (openSwordXLink) {
+    openSwordXLink.href = `https://x.com/intent/post?text=${encodeURIComponent(`${text} ${url}`)}`;
+  }
+  [copySwordLinkButton, shareSwordNativeButton].forEach((button) => {
+    if (button) button.disabled = false;
+  });
+}
+
+async function copySwordLink() {
+  const url = buildSwordShareUrl();
+  try {
+    await navigator.clipboard.writeText(url);
+  } catch {
+    const textarea = document.createElement('textarea');
+    textarea.value = url;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    textarea.remove();
+  }
+  if (shareStatus) shareStatus.textContent = 'Sword link copied.';
+}
+
+async function shareSwordNative() {
+  const url = buildSwordShareUrl();
+  const text = buildSwordShareText(currentSwordRow);
+  if (navigator.share) {
+    try {
+      await navigator.share({
+        title: document.title,
+        text,
+        url,
+      });
+      if (shareStatus) shareStatus.textContent = 'Share sheet opened.';
+      return;
+    } catch (error) {
+      if (error?.name === 'AbortError') return;
+    }
+  }
+  await copySwordLink();
+}
+
+copySwordLinkButton?.addEventListener('click', copySwordLink);
+shareSwordNativeButton?.addEventListener('click', shareSwordNative);
+
 async function init() {
   if (!swordId) {
     setStatusText('Sword id is missing. Use /sword/{id}.');
@@ -117,6 +190,7 @@ async function init() {
 
     renderVideo(row);
     renderBreakdown(row);
+    updateShareCard(row);
     document.title = `SwordFinder | ${row.batter_name || `Sword ${swordId}`}`;
     setStatusText(`Loaded sword ${swordId}.`);
   } catch (error) {
