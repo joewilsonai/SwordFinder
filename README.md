@@ -13,6 +13,10 @@ SwordFinder ranks "swords": two-strike swinging-strike moments where the hitter 
 
 [Try it](https://swordfinder.com) · [Ops diagram](https://swordfinder.com/ops) · [Sword info](https://swordfinder.com/sword-info.html)
 
+<br />
+
+<img src="docs/assets/swordfinder-leaderboards.png" alt="SwordFinder pitch-type leaderboard with MLB sword clips" width="900" />
+
 </div>
 
 ---
