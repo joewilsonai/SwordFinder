@@ -22,8 +22,28 @@ const rangeButtons = Array.from(document.querySelectorAll('[data-range]'));
 const season = latestSeasonRange();
 let latestDate = null;
 let activeRange = 'week';
-let activePitchType = '';
+let activePitchFilter = '';
 let pitchTypeLabels = new Map();
+
+const PITCH_FAMILIES = [
+  {
+    id: 'fastballs',
+    label: 'Fastballs',
+    codes: ['FF', 'FA', 'SI', 'FC'],
+  },
+  {
+    id: 'breaking',
+    label: 'Breaking Balls',
+    codes: ['SL', 'ST', 'CU', 'KC', 'SV', 'CS'],
+  },
+  {
+    id: 'offspeed',
+    label: 'Offspeed',
+    codes: ['CH', 'FS', 'FO', 'SC'],
+  },
+];
+
+const PITCH_FAMILY_BY_ID = new Map(PITCH_FAMILIES.map((family) => [family.id, family]));
 
 function normalizePitchType(value) {
   const normalized = String(value || '').trim().toUpperCase();
@@ -39,6 +59,15 @@ function setActiveRange(range) {
   });
 }
 
+function activePitchType() {
+  return activePitchFilter.startsWith('pitch:') ? normalizePitchType(activePitchFilter.slice(6)) : '';
+}
+
+function activePitchFamily() {
+  if (!activePitchFilter.startsWith('family:')) return null;
+  return PITCH_FAMILY_BY_ID.get(activePitchFilter.slice(7)) || null;
+}
+
 function updateUrlState() {
   const url = new URL(window.location.href);
   if (activeRange === 'week') {
@@ -47,10 +76,18 @@ function updateUrlState() {
     url.searchParams.set('range', activeRange);
   }
 
-  if (activePitchType) {
-    url.searchParams.set('pitch_type', activePitchType);
+  const pitchType = activePitchType();
+  const pitchFamily = activePitchFamily();
+
+  if (pitchType) {
+    url.searchParams.set('pitch_type', pitchType);
+    url.searchParams.delete('pitch_group');
+  } else if (pitchFamily) {
+    url.searchParams.set('pitch_group', pitchFamily.id);
+    url.searchParams.delete('pitch_type');
   } else {
     url.searchParams.delete('pitch_type');
+    url.searchParams.delete('pitch_group');
   }
 
   window.history.replaceState({}, '', url);
@@ -61,6 +98,41 @@ function pitchTypeLabel(code) {
   const names = pitchTypeLabels.get(code);
   if (!names?.length) return code;
   return `${code} - ${names.slice(0, 2).join(' / ')}`;
+}
+
+function pitchTypeHeading(code) {
+  const label = pitchTypeLabel(code);
+  return label.includes(' - ') ? label.split(' - ')[1] : label;
+}
+
+function availablePitchCodes() {
+  return Array.from(pitchTypeLabels.keys());
+}
+
+function selectedPitchCodes(rows = []) {
+  const pitchType = activePitchType();
+  if (pitchType) return [pitchType];
+
+  const rowCodes = new Set(
+    rows
+      .map((row) => normalizePitchType(row.pitch_type))
+      .filter(Boolean)
+  );
+  const knownCodes = availablePitchCodes().filter((code) => rowCodes.has(code) || !rowCodes.size);
+  const family = activePitchFamily();
+
+  if (family) {
+    return family.codes.filter((code) => knownCodes.includes(code) || rowCodes.has(code));
+  }
+
+  return knownCodes.length ? knownCodes : Array.from(rowCodes).sort();
+}
+
+function activePitchLabel() {
+  const pitchType = activePitchType();
+  if (pitchType) return pitchTypeLabel(pitchType);
+  const family = activePitchFamily();
+  return family ? family.label : 'all pitch types';
 }
 
 function rangeStart() {
@@ -79,25 +151,67 @@ function rangeStart() {
   return start.toISOString().split('T')[0];
 }
 
-function renderTopSwordCards(rows) {
-  cardsRoot.innerHTML = rows
-    .slice(0, 8)
-    .map(
-      (row) => {
-        const pitch = row.pitch_name || row.pitch_type || '--';
-        const pitchCode = row.pitch_type && row.pitch_name ? ` (${row.pitch_type})` : '';
-        return `
+function renderSwordCard(row, rank) {
+  const pitch = row.pitch_name || row.pitch_type || '--';
+  const pitchCode = row.pitch_type && row.pitch_name ? ` (${row.pitch_type})` : '';
+  return `
       <article class="card sword-card p-3 md:p-4">
         <div class="mb-2 flex items-center justify-between">
-          <a class="font-semibold hover:text-[var(--accent-soft)]" href="${linkForPlayer(row)}">${escapeHtml(row.batter_name || 'Unknown')}</a>
+          <div class="flex min-w-0 items-center gap-2">
+            <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-zinc-700 bg-black/60 text-sm font-semibold text-[var(--accent-soft)]">${rank}</span>
+            <a class="truncate font-semibold hover:text-[var(--accent-soft)]" href="${linkForPlayer(row)}">${escapeHtml(row.batter_name || 'Unknown')}</a>
+          </div>
           <span class="text-lg text-[var(--accent-soft)]">${Number(row.sword_score || 0).toFixed(1)}</span>
         </div>
         <p class="text-xs uppercase tracking-[0.08em] text-zinc-400">${formatDate(row.game_date)} • ${escapeHtml(pitch)}${escapeHtml(pitchCode)} ${Number(row.release_speed || 0).toFixed(1)} mph</p>
+        <p class="mt-1 text-sm text-zinc-400">vs <a class="underline decoration-zinc-600 hover:decoration-[var(--accent-soft)]" href="${linkForPitcher(row)}">${escapeHtml(row.pitcher_name || row.player_name || 'Unknown pitcher')}</a></p>
       </article>
     `;
-      }
+}
+
+function renderTopSwordCards(rows) {
+  const codes = selectedPitchCodes(rows);
+  const rowsByPitch = new Map(codes.map((code) => [code, []]));
+
+  rows.forEach((row) => {
+    const code = normalizePitchType(row.pitch_type);
+    if (!rowsByPitch.has(code)) return;
+    const group = rowsByPitch.get(code);
+    if (group.length < 5) group.push(row);
+  });
+
+  const groups = codes
+    .map((code) => ({
+      code,
+      rows: rowsByPitch.get(code) || [],
+    }))
+    .filter((group) => group.rows.length);
+
+  if (!groups.length) {
+    cardsRoot.innerHTML = '';
+    return 0;
+  }
+
+  cardsRoot.innerHTML = groups
+    .map(
+      (group) => `
+      <div class="pitch-type-group">
+        <div class="mb-3 flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p class="text-xs uppercase tracking-[0.12em] text-zinc-500">${escapeHtml(group.code)}</p>
+            <h3 class="brand-title text-3xl leading-none">${escapeHtml(pitchTypeHeading(group.code))}</h3>
+          </div>
+          <p class="text-sm text-zinc-400">Top ${group.rows.length} ${escapeHtml(group.code)} sword${group.rows.length === 1 ? '' : 's'}</p>
+        </div>
+        <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          ${group.rows.map((row, index) => renderSwordCard(row, index + 1)).join('')}
+        </div>
+      </div>
+    `
     )
     .join('');
+
+  return groups.reduce((total, group) => total + group.rows.length, 0);
 }
 
 function aggregateBy(rows, idKey, nameKey) {
@@ -218,17 +332,55 @@ async function fetchPitchTypeOptions() {
   );
 
   const optionCodes = Array.from(pitchTypeLabels.keys());
-  if (activePitchType && !pitchTypeLabels.has(activePitchType)) {
-    optionCodes.unshift(activePitchType);
+  const selectedPitchType = activePitchType();
+  if (selectedPitchType && !pitchTypeLabels.has(selectedPitchType)) {
+    optionCodes.unshift(selectedPitchType);
   }
 
   pitchTypeFilter.innerHTML = [
     '<option value="">All pitch types</option>',
-    ...optionCodes.map(
-      (code) => `<option value="${escapeHtml(code)}">${escapeHtml(pitchTypeLabel(code))}</option>`
+    '<optgroup label="Pitch families">',
+    ...PITCH_FAMILIES.map(
+      (family) => `<option value="family:${escapeHtml(family.id)}">${escapeHtml(family.label)}</option>`
     ),
+    '</optgroup>',
+    '<optgroup label="Individual pitch types">',
+    ...optionCodes.map(
+      (code) => `<option value="pitch:${escapeHtml(code)}">${escapeHtml(pitchTypeLabel(code))}</option>`
+    ),
+    '</optgroup>',
   ].join('');
-  pitchTypeFilter.value = activePitchType;
+  pitchTypeFilter.value = activePitchFilter;
+}
+
+async function fetchLeaderboardRows(start) {
+  const pageSize = 1000;
+  const rows = [];
+  const pitchType = activePitchType();
+
+  for (let offset = 0; offset < 10000; offset += pageSize) {
+    const params = {
+      select: 'id,batter,pitcher,player_name,pitcher_name,batter_name,sword_score,game_date,pitch_type,pitch_name,release_speed',
+      game_type: 'eq.R',
+      sword_score: 'gte.90',
+      game_date: [`gte.${start}`, `lte.${latestDate}`],
+      order: 'sword_score.desc',
+      limit: pageSize,
+      offset,
+    };
+    if (pitchType) {
+      params.pitch_type = `eq.${pitchType}`;
+    }
+
+    const page = await fetchRows('mlb_pitches_enhanced', params);
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
+
+  const family = activePitchFamily();
+  if (!family) return rows;
+  const allowedCodes = new Set(family.codes);
+  return rows.filter((row) => allowedCodes.has(normalizePitchType(row.pitch_type)));
 }
 
 async function refresh() {
@@ -241,34 +393,23 @@ async function refresh() {
   }
 
   const start = rangeStart();
-  const params = {
-    select: 'id,batter,pitcher,player_name,pitcher_name,batter_name,sword_score,game_date,pitch_type,pitch_name,release_speed',
-    game_type: 'eq.R',
-    sword_score: 'gte.90',
-    game_date: [`gte.${start}`, `lte.${latestDate}`],
-    order: 'sword_score.desc',
-    limit: 500,
-  };
-  if (activePitchType) {
-    params.pitch_type = `eq.${activePitchType}`;
-  }
-
-  const rows = await fetchRows('mlb_pitches_enhanced', params);
-
-  renderTopSwordCards(rows);
+  const rows = await fetchLeaderboardRows(start);
+  const displayedRows = renderTopSwordCards(rows);
   renderHitterTable(rows);
   renderPitcherTable(rows);
 
   const rangeLabel = activeRange === 'season' ? `${season.year} season` : `last ${activeRange === 'week' ? '7' : '30'} days`;
-  const pitchLabel = activePitchType ? `${pitchTypeLabel(activePitchType)} swords` : 'all pitch types';
-  heading.textContent = activePitchType ? `Top ${activePitchType} Sword Events` : 'Top Sword Events';
+  const pitchLabel = activePitchLabel();
+  heading.textContent = activePitchType()
+    ? `Top 5 ${activePitchType()} Swords`
+    : `Top 5 By Pitch Type`;
 
-  if (!rows.length) {
+  if (!displayedRows) {
     setStatusText(`No ${pitchLabel} found for ${rangeLabel}.`);
     return;
   }
 
-  setStatusText(`Showing ${pitchLabel} for ${rangeLabel} ending ${formatDate(latestDate)}.`);
+  setStatusText(`Showing top 5 swords for ${pitchLabel} by pitch type for ${rangeLabel} ending ${formatDate(latestDate)}.`);
 }
 
 rangeButtons.forEach((btn) => {
@@ -280,15 +421,23 @@ rangeButtons.forEach((btn) => {
 });
 
 pitchTypeFilter.addEventListener('change', async () => {
-  activePitchType = normalizePitchType(pitchTypeFilter.value);
-  pitchTypeFilter.value = activePitchType;
-  if (activePitchType) setActiveRange('season');
+  const rawValue = String(pitchTypeFilter.value || '');
+  if (rawValue.startsWith('family:') && PITCH_FAMILY_BY_ID.has(rawValue.slice(7))) {
+    activePitchFilter = rawValue;
+  } else if (rawValue.startsWith('pitch:')) {
+    const code = normalizePitchType(rawValue.slice(6));
+    activePitchFilter = code ? `pitch:${code}` : '';
+  } else {
+    activePitchFilter = '';
+  }
+  pitchTypeFilter.value = activePitchFilter;
+  if (activePitchFilter) setActiveRange('season');
   updateUrlState();
   await refresh();
 });
 
 clearPitchFilterButton.addEventListener('click', async () => {
-  activePitchType = '';
+  activePitchFilter = '';
   pitchTypeFilter.value = '';
   updateUrlState();
   await refresh();
@@ -299,7 +448,13 @@ async function init() {
     setStatusText('Loading leaderboard data');
     const params = new URLSearchParams(window.location.search);
     setActiveRange(params.get('range') || activeRange);
-    activePitchType = normalizePitchType(params.get('pitch_type') || params.get('pitch'));
+    const pitchType = normalizePitchType(params.get('pitch_type') || params.get('pitch'));
+    const pitchGroup = String(params.get('pitch_group') || '').trim().toLowerCase();
+    if (pitchType) {
+      activePitchFilter = `pitch:${pitchType}`;
+    } else if (PITCH_FAMILY_BY_ID.has(pitchGroup)) {
+      activePitchFilter = `family:${pitchGroup}`;
+    }
     await fetchLatestDate();
     await fetchPitchTypeOptions();
     await refresh();
