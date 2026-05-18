@@ -4,26 +4,38 @@ from pathlib import Path
 def test_shared_layout_mounts_first_visit_intro():
     source = Path("ui/assets/layout.js").read_text()
 
-    assert "swordfinder:intro:v1" in source
+    assert "swordfinder:intro:v2" in source
     assert "mountFirstVisitIntro" in source
     assert "window.localStorage.getItem" in source
     assert "window.localStorage.setItem" in source
     assert "What's a Sword?" in source
-    assert "Pitching Ninja popularized the term." in source
-    assert "Bauer helped make the celebration iconic." in source
-    assert "SwordFinder ranks the nastiest misses with real clips." in source
+    assert "Spot the shape" in source
+    assert "Read the score" in source
+    assert "Watch the clip" in source
     assert "data-sword-intro-dismiss" in source
-    assert "Watch the lore clips" in source
-    assert "/index.html#sword-lore" in source
+    assert "Open Sword Info" in source
+    assert 'href="/sword-info.html"' in source
+    assert "Skip to leaderboards" in source
+    assert "active === 'info'" in source
+    assert "nav-label-short" in source
     assert "if (active !== 'ops')" in source
 
 
-def test_homepage_keeps_intro_anchor_target():
+def test_homepage_links_to_sword_info_without_embedding_lore():
     html = Path("ui/index.html").read_text()
 
     assert 'id="what-is-a-sword"' in html
     assert "What is a sword?" in html
-    assert 'id="sword-lore"' in html
+    assert "/sword-info.html" in html
+    assert 'id="sword-lore"' not in html
+    assert "youtube-nocookie.com/embed" not in html
+
+
+def test_sword_info_page_contains_lore_embeds():
+    html = Path("ui/sword-info.html").read_text()
+    source = Path("ui/assets/sword-info.js").read_text()
+
+    assert "Sword Info" in html
     assert "Sword Lore" in html
     assert "https://www.youtube.com/watch?v=ixfVMhdIO8s" in html
     assert "https://x.com/PitchingNinja/status/1382299579266240513?s=20" in html
@@ -41,6 +53,8 @@ def test_homepage_keeps_intro_anchor_target():
     assert html.count("allowfullscreen") >= 5
     assert "Trevor Bauer" in html
     assert "Momentum" in html
+    assert "mountNav('info')" in source
+    assert "setFooter()" in source
 
 
 def test_intro_has_mobile_friendly_styles():
@@ -62,3 +76,7 @@ def test_intro_has_mobile_friendly_styles():
     assert ".lore-video-wide" in css
     assert "aspect-ratio: 9 / 16" in css
     assert "aspect-ratio: 16 / 9" in css
+    assert ".info-hero" in css
+    assert ".info-steps" in css
+    assert ".info-cta" in css
+    assert ".nav-label-short" in css

@@ -1,4 +1,4 @@
-const INTRO_STORAGE_KEY = 'swordfinder:intro:v1';
+const INTRO_STORAGE_KEY = 'swordfinder:intro:v2';
 let introMounted = false;
 
 function hasSeenIntro() {
@@ -40,15 +40,15 @@ export function mountFirstVisitIntro() {
         A sword is the swing a hitter makes when a pitch fools him so badly the bat stops out front like he's holding a sword.
       </p>
       <div class="sword-intro-notes mt-4">
-        <p>Pitching Ninja popularized the term.</p>
-        <p>Bauer helped make the celebration iconic.</p>
-        <p>SwordFinder ranks the nastiest misses with real clips.</p>
+        <p><span>1</span> Spot the shape: the hitter is fooled and the bat dies out front.</p>
+        <p><span>2</span> Read the score: 90+ makes the board, 100+ is elite ugly.</p>
+        <p><span>3</span> Watch the clip: SwordFinder ranks the nastiest misses daily.</p>
       </div>
       <div class="mt-5 flex flex-col gap-2 sm:flex-row">
         <button class="primary rounded-md px-4 py-2 text-sm uppercase tracking-[0.08em]" type="button" data-sword-intro-dismiss>Start Watching</button>
-        <a class="secondary rounded-md px-4 py-2 text-sm uppercase tracking-[0.08em]" href="/leaderboards.html" data-sword-intro-dismiss>See Leaderboards</a>
+        <a class="secondary rounded-md px-4 py-2 text-sm uppercase tracking-[0.08em]" href="/sword-info.html" data-sword-intro-dismiss>Open Sword Info</a>
       </div>
-      <a class="mt-3 inline-flex min-h-12 items-center text-sm text-zinc-400 underline decoration-zinc-700 hover:text-zinc-200 hover:decoration-[var(--accent-soft)]" href="/index.html#sword-lore" data-sword-intro-dismiss>Watch the lore clips</a>
+      <a class="mt-3 inline-flex min-h-12 items-center text-sm text-zinc-400 underline decoration-zinc-700 hover:text-zinc-200 hover:decoration-[var(--accent-soft)]" href="/leaderboards.html" data-sword-intro-dismiss>Skip to leaderboards</a>
     </div>
   `;
 
@@ -82,7 +82,8 @@ export function mountNav(active = 'home') {
       </a>
       <div class="app-nav flex items-center gap-2 text-sm uppercase tracking-[0.09em] md:gap-6">
         <a class="app-link ${active === 'home' ? 'active' : ''}" href="/index.html">Home</a>
-        <a class="app-link ${active === 'leaderboards' ? 'active' : ''}" href="/leaderboards.html">Leaderboards</a>
+        <a class="app-link ${active === 'info' ? 'active' : ''}" href="/sword-info.html">Info</a>
+        <a class="app-link ${active === 'leaderboards' ? 'active' : ''}" href="/leaderboards.html"><span class="nav-label-full">Leaderboards</span><span class="nav-label-short">Boards</span></a>
         <a class="app-link ${active === 'ops' ? 'active' : ''}" href="/ops.html">Ops</a>
       </div>
     </div>

@@ -4,6 +4,7 @@ Static frontend for SwordFinder using vanilla JavaScript + Tailwind CDN.
 
 ## Pages
 - `/index.html` - date-selectable top-5 daily sword slate
+- `/sword-info.html` - first-visit sword explainer, source clips, and lore
 - `/leaderboards.html` - weekly / monthly / season leaderboards
 - `/ops.html` - API health, video cache status, and pending clip queue
 - `/player/[id].html` - hitter sword profile
