@@ -5,7 +5,7 @@ setFooter();
 
 document.getElementById('replay-intro')?.addEventListener('click', () => {
   try {
-    window.localStorage.removeItem('swordfinder:intro:v2');
+    window.localStorage.removeItem('swordfinder:intro:v3');
   } catch {
     // Storage can be unavailable in private or hardened browser contexts.
   }

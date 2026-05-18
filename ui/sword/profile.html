@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>SwordFinder | Sword Detail</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/brand/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/assets/brand/favicon-16x16.png" />
+    <link rel="apple-touch-icon" href="/assets/brand/apple-touch-icon.png" />
+    <link rel="stylesheet" href="/assets/styles.css" />
+  </head>
+  <body>
+    <header id="top-nav" class="sticky top-0 z-50 border-b border-zinc-800/80 bg-black/70 backdrop-blur"></header>
+
+    <main class="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 pb-12 pt-6 md:px-6 md:pt-10">
+      <section class="sword-detail-hero">
+        <div>
+          <p class="text-xs uppercase tracking-[0.14em] text-zinc-500">Sword Page</p>
+          <h1 id="sword-title" class="brand-title mt-2 text-5xl leading-none text-zinc-100 md:text-7xl">Loading sword</h1>
+          <p id="sword-subtitle" class="mt-3 text-base text-zinc-300">Pulling the clip and score breakdown.</p>
+        </div>
+        <div class="sword-detail-score">
+          <p class="text-xs uppercase tracking-[0.14em] text-zinc-500">Sword Score</p>
+          <p id="sword-score" class="brand-title text-6xl leading-none text-[var(--accent-soft)]">--</p>
+        </div>
+      </section>
+
+      <section class="sword-detail-grid">
+        <div class="video-shell sword-detail-video">
+          <div id="sword-video-placeholder" class="video-placeholder text-sm text-zinc-500">Video loading</div>
+        </div>
+        <aside class="sword-detail-panel">
+          <div>
+            <p class="text-xs uppercase tracking-[0.14em] text-zinc-500">Why it scored</p>
+            <h2 id="score-headline" class="brand-title mt-1 text-3xl leading-none">Calculating</h2>
+          </div>
+          <div id="score-breakdown" class="score-breakdown"></div>
+          <div class="flex flex-wrap gap-2">
+            <a id="hitter-link" class="secondary rounded-md px-4 py-2 text-sm uppercase tracking-[0.08em]" href="#">Hitter History</a>
+            <a id="pitcher-link" class="secondary rounded-md px-4 py-2 text-sm uppercase tracking-[0.08em]" href="#">Pitcher Profile</a>
+          </div>
+        </aside>
+      </section>
+
+      <section class="method-card">
+        <div>
+          <p class="text-xs uppercase tracking-[0.14em] text-zinc-500">Rule</p>
+          <h2 class="brand-title mt-1 text-4xl leading-none">No K, No Sword</h2>
+        </div>
+        <p class="max-w-2xl text-base leading-relaxed text-zinc-300">
+          SwordFinder only crowns strikeout swings. A bad miss in the middle of an at-bat can be erased by the next pitch; a strikeout leaves the ugly swing as the final image.
+        </p>
+      </section>
+
+      <p id="status-text" class="text-sm text-zinc-400 loading-dots">Loading sword detail</p>
+    </main>
+
+    <footer id="app-footer" class="border-t border-zinc-800/80"></footer>
+
+    <script src="/assets/config.js"></script>
+    <script type="module" src="/assets/sword-detail.js"></script>
+  </body>
+</html>

@@ -206,6 +206,12 @@ export function linkForPitcher(row) {
   return `/pitcher/${id}`;
 }
 
+export function linkForSword(row) {
+  const id = row?.id;
+  if (!id) return '#';
+  return `/sword/${id}`;
+}
+
 export function bindVideoHover(root = document) {
   root.querySelectorAll('video[data-hover-unmute="true"]').forEach((video) => {
     video.addEventListener('mouseenter', () => {
@@ -224,8 +230,13 @@ export function parseEntityIdFromPath(kind) {
   const parts = path.split('/').filter(Boolean);
   const idx = parts.indexOf(kind);
 
-  if (idx !== -1 && parts[idx + 1] && parts[idx + 1] !== `[id].html`) {
-    return parts[idx + 1].replace('.html', '');
+  const nextPart = parts[idx + 1];
+  if (
+    idx !== -1 &&
+    nextPart &&
+    !['[id].html', 'profile', 'profile.html'].includes(nextPart)
+  ) {
+    return nextPart.replace('.html', '');
   }
 
   const param = new URLSearchParams(window.location.search).get('id');

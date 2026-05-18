@@ -1,4 +1,4 @@
-const INTRO_STORAGE_KEY = 'swordfinder:intro:v2';
+const INTRO_STORAGE_KEY = 'swordfinder:intro:v3';
 let introMounted = false;
 
 function hasSeenIntro() {
@@ -49,8 +49,8 @@ export function mountFirstVisitIntro(options = {}) {
       </p>
       <div class="sword-intro-notes mt-4">
         <p><span>1</span> Spot the shape: the hitter is fooled and the bat dies out front.</p>
-        <p><span>2</span> Read the score: 90+ makes the board, 100+ is elite ugly.</p>
-        <p><span>3</span> Watch the clip: SwordFinder ranks the nastiest misses daily.</p>
+        <p><span>2</span> Finish the at-bat: no K, no sword. A strikeout makes the ugly swing stick.</p>
+        <p><span>3</span> Read the score: 90+ makes the board, 100+ is elite ugly.</p>
       </div>
       <div class="mt-5 flex flex-col gap-2 sm:flex-row">
         <button class="primary rounded-md px-4 py-2 text-sm uppercase tracking-[0.08em]" type="button" data-sword-intro-dismiss>Start Watching</button>

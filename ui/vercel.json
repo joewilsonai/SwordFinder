@@ -11,6 +11,10 @@
       "dest": "/pitcher/profile?id=$1"
     },
     {
+      "src": "^/sword/([^/]+)$",
+      "dest": "/sword/profile?id=$1"
+    },
+    {
       "handle": "filesystem"
     }
   ]

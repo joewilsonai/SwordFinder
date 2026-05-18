@@ -20,7 +20,7 @@
           <h1 class="brand-title mt-2 text-5xl leading-none text-zinc-100 md:text-7xl">What Is a Sword?</h1>
         </div>
         <p class="max-w-2xl text-lg leading-relaxed text-zinc-300">
-          A sword is the swing a hitter makes when a pitch fools him so badly the bat stops out front like he is holding a sword. SwordFinder ranks those misses with real clips, daily boards, and pitch-type splits.
+          A sword is the strikeout swing a hitter makes when a pitch fools him so badly the bat stops out front like he is holding a sword. SwordFinder ranks those finished at-bats with real clips, daily boards, and pitch-type splits.
         </p>
       </section>
 
@@ -32,14 +32,72 @@
         </article>
         <article>
           <p>2</p>
-          <h2>Read the score</h2>
-          <span>90+ makes the board. 100+ is an elite miss: the kind of ugly swing worth clipping.</span>
+          <h2>Finish the hitter</h2>
+          <span>No K, no sword. A bad miss in the middle of an at-bat can disappear on the next pitch.</span>
         </article>
         <article>
           <p>3</p>
-          <h2>Watch the clip</h2>
-          <span>Every ranked sword is easier to understand in motion, so SwordFinder leads with video.</span>
+          <h2>Read the score</h2>
+          <span>90+ makes the board. 100+ is an elite miss: the kind of ugly strikeout swing worth clipping.</span>
         </article>
+      </section>
+
+      <section class="method-card">
+        <div>
+          <p class="text-xs uppercase tracking-[0.14em] text-zinc-500">SwordFinder Method</p>
+          <h2 class="brand-title mt-1 text-4xl leading-none">No K, No Sword</h2>
+        </div>
+        <div class="space-y-3 text-base leading-relaxed text-zinc-300">
+          <p>A hitter can look lost on pitch two and still win the at-bat on pitch three. SwordFinder only crowns strikeout swings, because the sword is the lasting image: the pitcher finishes the hitter, and the ugly swing is what everyone remembers.</p>
+          <p>The SwordFinder Score is proprietary. It grades the nastiness of the strikeout miss using public bat-tracking and pitch context, then ranks the swings by how finished the hitter looked.</p>
+        </div>
+      </section>
+
+      <section class="architecture-section">
+        <div class="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p class="text-xs uppercase tracking-[0.14em] text-zinc-500">Architecture</p>
+            <h2 class="brand-title text-4xl leading-none">How SwordFinder Works</h2>
+          </div>
+          <p class="text-sm text-zinc-400 md:max-w-md">A production loop from public pitch data to scored strikeout clips, ranked leaderboards, and shareable sword pages.</p>
+        </div>
+        <div class="architecture-flow" aria-label="SwordFinder architecture diagram">
+          <div class="arch-node">
+            <span>1</span>
+            <strong>Statcast Pull</strong>
+            <p>Daily MLB pitch rows, bat tracking, pitch context, and strikeout results.</p>
+          </div>
+          <div class="arch-arrow" aria-hidden="true">→</div>
+          <div class="arch-node arch-node-accent">
+            <span>2</span>
+            <strong>SwordFinder Score</strong>
+            <p>Proprietary strikeout-only ranking for ugly, finished swings.</p>
+          </div>
+          <div class="arch-arrow" aria-hidden="true">→</div>
+          <div class="arch-node">
+            <span>3</span>
+            <strong>Supabase</strong>
+            <p>Scored rows, player history, pitcher profiles, and leaderboard queries.</p>
+          </div>
+          <div class="arch-arrow" aria-hidden="true">→</div>
+          <div class="arch-node">
+            <span>4</span>
+            <strong>Video Cache</strong>
+            <p>MLB clips resolved, downloaded, and served through Azure Blob Storage.</p>
+          </div>
+          <div class="arch-arrow" aria-hidden="true">→</div>
+          <div class="arch-node">
+            <span>5</span>
+            <strong>Railway API</strong>
+            <p>Daily slate, profiles, ops routes, video hydration, and share workflows.</p>
+          </div>
+          <div class="arch-arrow" aria-hidden="true">→</div>
+          <div class="arch-node">
+            <span>6</span>
+            <strong>Vercel UI</strong>
+            <p>Daily swords, leaderboards, info, profiles, and shareable sword pages.</p>
+          </div>
+        </div>
       </section>
 
       <section id="sword-lore" class="sword-lore">

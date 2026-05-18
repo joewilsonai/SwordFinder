@@ -8,6 +8,7 @@ import {
   latestSeasonRange,
   linkForPitcher,
   linkForPlayer,
+  linkForSword,
 } from './supabase-rest.js';
 import { mountNav, setFooter, setStatusText } from './layout.js';
 
@@ -15,6 +16,7 @@ mountNav('home');
 setFooter();
 
 const heroDate = document.getElementById('hero-date');
+const swordOfDayRoot = document.getElementById('sword-of-day');
 const cardsRoot = document.getElementById('sword-cards');
 const emptyRoot = document.getElementById('empty-state');
 const dateInput = document.getElementById('slate-date-input');
@@ -92,6 +94,27 @@ function metricTile(label, value, unit = '') {
   `;
 }
 
+function describeScore(row) {
+  const score = numericValue(row.sword_score);
+  const miss = numericValue(row.strike_zone_distance_inches);
+  const batSpeed = numericValue(row.bat_speed);
+  const parts = [];
+
+  if (score !== null && score >= 100) {
+    parts.push('elite SwordFinder score');
+  } else if (score !== null) {
+    parts.push('board-level SwordFinder score');
+  }
+  if (batSpeed !== null && batSpeed <= 40) {
+    parts.push('dead-bat swing');
+  }
+  if (miss !== null && miss >= 10) {
+    parts.push('big miss');
+  }
+
+  return parts.length ? parts.join(' • ') : 'strikeout sword candidate';
+}
+
 async function getLatestSwordDate() {
   const rows = await fetchRows('mlb_pitches_enhanced', {
     select: 'game_date',
@@ -108,6 +131,7 @@ async function getLatestSwordDate() {
 function cardTemplate(row, idx) {
   const playerLink = linkForPlayer(row);
   const pitcherLink = linkForPitcher(row);
+  const swordLink = linkForSword(row);
   const video = row.video_azure_blob_url;
   const score = Number(row.sword_score || 0).toFixed(1);
   const videoBadge = video ? 'Video ready' : 'Video pending';
@@ -131,8 +155,9 @@ function cardTemplate(row, idx) {
       <p class="mb-3 text-sm text-zinc-300">
         vs <a class="underline decoration-zinc-500 hover:decoration-[var(--accent-soft)]" href="${pitcherLink}">${escapeHtml(row.pitcher_name || row.player_name || 'Unknown pitcher')}</a>
         • ${escapeHtml(pitchName)} ${formatDecimal(row.release_speed)} mph
-        • ${escapeHtml(row.description || row.events || 'swinging strike')}
+        • ${escapeHtml(row.events || 'strikeout')}
       </p>
+      <p class="mb-3 text-sm text-zinc-400">${escapeHtml(describeScore(row))}</p>
       <div class="video-shell mb-3">
         ${video ? `
           <video data-hover-unmute="true" autoplay muted loop playsinline controls preload="metadata">
@@ -155,8 +180,49 @@ function cardTemplate(row, idx) {
         ${metricTile('Swing Length', formatDecimal(row.swing_length), 'ft')}
         ${metricTile('Miss', formatDecimal(row.strike_zone_distance_inches), 'in')}
       </div>
+      <div class="mt-3 flex flex-wrap gap-2">
+        <a class="secondary rounded-md px-3 py-2 text-xs uppercase tracking-[0.08em]" href="${swordLink}">Open Sword Page</a>
+        <a class="tap-target text-xs uppercase tracking-[0.08em] text-zinc-300 underline decoration-zinc-600 hover:decoration-[var(--accent-soft)]" href="${playerLink}">Hitter History</a>
+      </div>
     </article>
   `;
+}
+
+function renderSwordOfDayFeature(slate, selectedDate) {
+  if (!swordOfDayRoot) return;
+
+  const row = slate?.rows?.[0];
+  if (!row) {
+    swordOfDayRoot.classList.add('hidden');
+    swordOfDayRoot.innerHTML = '';
+    return;
+  }
+
+  const pitchName = row.pitch_name || row.pitch_type || 'Pitch';
+  const swordLink = linkForSword(row);
+  const playerLink = linkForPlayer(row);
+  const pitcherLink = linkForPitcher(row);
+
+  swordOfDayRoot.innerHTML = `
+    <div>
+      <p class="text-xs uppercase tracking-[0.14em] text-zinc-500">Sword of the Day</p>
+      <h2 class="brand-title mt-1 text-4xl leading-none text-zinc-100 md:text-5xl">${escapeHtml(row.batter_name || 'Unknown hitter')}</h2>
+      <p class="mt-2 text-sm text-zinc-400">
+        ${formatDate(selectedDate)} • vs <a class="underline decoration-zinc-600 hover:decoration-[var(--accent-soft)]" href="${pitcherLink}">${escapeHtml(row.pitcher_name || row.player_name || 'Unknown pitcher')}</a>
+      </p>
+    </div>
+    <div class="daily-feature-stats">
+      ${metricTile('Score', formatDecimal(row.sword_score))}
+      ${metricTile('Pitch', pitchName)}
+      ${metricTile('Bat Speed', formatDecimal(row.bat_speed), 'mph')}
+      ${metricTile('Miss', formatDecimal(row.strike_zone_distance_inches), 'in')}
+    </div>
+    <div class="daily-feature-actions">
+      <a class="primary rounded-md px-4 py-2 text-sm uppercase tracking-[0.08em]" href="${swordLink}">Open Sword Page</a>
+      <a class="secondary rounded-md px-4 py-2 text-sm uppercase tracking-[0.08em]" href="${playerLink}">Hitter History</a>
+    </div>
+  `;
+  swordOfDayRoot.classList.remove('hidden');
 }
 
 function updateHeroMetricsFromSlate(slate, selectedDate) {
@@ -520,6 +586,7 @@ async function refreshSlate(date, options = {}) {
     heroDate.textContent = `Selected slate: ${formatDate(date)}`;
     const slate = await loadTopCards(date);
     updateHeroMetricsFromSlate(slate, date);
+    renderSwordOfDayFeature(slate, date);
   } finally {
     dateInput.disabled = false;
   }
