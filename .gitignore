@@ -131,3 +131,5 @@ videos/
 # Temporary files
 temp/
 tmp/
+.vercel
+.env*

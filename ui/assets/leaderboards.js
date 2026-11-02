@@ -8,7 +8,7 @@ import {
   linkForPlayer,
   linkForSword,
   videoPreviewUrl,
-} from './supabase-rest.js';
+} from './data.js';
 import { mountNav, setFooter, setStatusText } from './layout.js';
 
 mountNav('leaderboards');

@@ -1,0 +1,47 @@
+name: Daily swords
+
+on:
+  schedule:
+    - cron: '0 13 * * *' # after the previous day's games are final
+  workflow_dispatch:
+    inputs:
+      clips:
+        description: Most clips to fetch this run
+        default: '150'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-swords
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: pip install azure-storage-blob==12.*
+      - run: python -m unittest discover -s tests
+      - name: Build the data
+        id: build
+        continue-on-error: true
+        env:
+          AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}
+        run: python pipeline/update.py --clips "${{ inputs.clips || '150' }}"
+      # Committing daily, even with no games, deploys the fresh check-in and keeps GitHub
+      # from disabling this schedule over a quiet off-season.
+      - name: Commit
+        run: |
+          git config user.name "swordfinder-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add ui/data pipeline/state
+          git diff --cached --quiet || git commit -m "Data for $(date -u +%F)"
+          git push
+      - name: Fail the run if the build had errors
+        if: steps.build.outcome == 'failure'
+        run: exit 1

@@ -1,1 +1,0 @@
-"""Local SwordFinder maintenance helpers."""

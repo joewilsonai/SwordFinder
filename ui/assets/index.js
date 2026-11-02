@@ -4,12 +4,11 @@ import {
   fetchApiJson,
   fetchRows,
   formatDate,
-  getApiBaseUrl,
   latestSeasonRange,
   linkForPitcher,
   linkForPlayer,
   linkForSword,
-} from './supabase-rest.js';
+} from './data.js';
 import { mountNav, setFooter, setStatusText } from './layout.js';
 
 mountNav('home');
@@ -24,44 +23,11 @@ const selectedDateMetric = document.getElementById('metric-selected-date');
 const topScoreMetric = document.getElementById('metric-top-score');
 const biggestMissMetric = document.getElementById('metric-biggest-miss');
 const clipsReadyMetric = document.getElementById('metric-clips-ready');
-const draftXPostButton = document.getElementById('draft-x-post');
-const xDraftPanel = document.getElementById('x-draft-panel');
-const xDraftText = document.getElementById('x-draft-text');
-const xDraftMeta = document.getElementById('x-draft-meta');
-const xDraftStatus = document.getElementById('x-draft-status');
-const connectXButton = document.getElementById('connect-x-account');
-const postXNowButton = document.getElementById('post-x-now');
-const postTopSwordVideoButton = document.getElementById('post-top-sword-video');
-const xPinPanel = document.getElementById('x-pin-panel');
-const xPinInput = document.getElementById('x-pin-input');
-const verifyXPinButton = document.getElementById('verify-x-pin');
-const copyXDraftButton = document.getElementById('copy-x-draft');
-const openXDraftButton = document.getElementById('open-x-draft');
-const xSharingEnabled = Boolean(
-  draftXPostButton &&
-  xDraftPanel &&
-  xDraftText &&
-  xDraftMeta &&
-  xDraftStatus &&
-  connectXButton &&
-  postXNowButton &&
-  postTopSwordVideoButton &&
-  xPinPanel &&
-  xPinInput &&
-  verifyXPinButton &&
-  copyXDraftButton &&
-  openXDraftButton
-);
+const shareXButton = document.getElementById('draft-x-post');
 
 const season = latestSeasonRange();
 let currentSlateDate = null;
-let currentXPageUrl = '';
-let currentXShareText = '';
-let isXConnected = false;
-let xScreenName = '';
-let xMediaUploadEnabled = true;
-let canPostTopSwordDirectly = false;
-let pendingXOAuthToken = '';
+let currentTopSword = null;
 
 function isCompleteDate(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''));
@@ -240,290 +206,15 @@ function updateHeroMetricsFromSlate(slate, selectedDate) {
   clipsReadyMetric.textContent = rows.length ? `${readyClips} / ${rows.length}` : '--';
 }
 
-function buildEditableShareText(draft = '') {
-  const trimmedDraft = draft.trim();
-  if (!currentXPageUrl) return trimmedDraft;
-  if (trimmedDraft.includes(currentXPageUrl)) return trimmedDraft;
-
-  const separator = '\n\n';
-  const remaining = 280 - separator.length - currentXPageUrl.length;
-  const boundedDraft = remaining > 0 && trimmedDraft.length > remaining
-    ? `${trimmedDraft.slice(0, Math.max(remaining - 3, 0)).trim()}...`
-    : trimmedDraft;
-
-  return `${boundedDraft}${separator}${currentXPageUrl}`.trim();
-}
-
-function setXDraftControls(draft = '', shareText = '') {
-  if (!xSharingEnabled) return;
-
-  currentXShareText = shareText || buildEditableShareText(draft);
-  const hasDraft = Boolean(currentXShareText.trim());
-  copyXDraftButton.disabled = !hasDraft;
-  postXNowButton.disabled = !hasDraft || !isXConnected;
-  postTopSwordVideoButton.disabled = !canPostTopSwordDirectly || !currentSlateDate;
-  postTopSwordVideoButton.textContent = xMediaUploadEnabled ? 'Post #1 Video' : 'Post #1 Link';
-  postTopSwordVideoButton.title = xMediaUploadEnabled
-    ? 'Post the #1 sword with native X video.'
-    : 'Post the #1 sword with a SwordFinder watch link.';
-  openXDraftButton.href = hasDraft
-    ? `https://x.com/intent/post?text=${encodeURIComponent(currentXShareText)}`
-    : 'https://x.com/intent/post';
-  openXDraftButton.classList.toggle('pointer-events-none', !hasDraft);
-  openXDraftButton.classList.toggle('opacity-50', !hasDraft);
-}
-
-function resetXDraftPanel() {
-  if (!xSharingEnabled) return;
-
-  xDraftPanel.classList.add('hidden');
-  xPinPanel.classList.add('hidden');
-  xDraftText.value = '';
-  xPinInput.value = '';
-  currentXPageUrl = '';
-  currentXShareText = '';
-  pendingXOAuthToken = '';
-  xMediaUploadEnabled = true;
-  canPostTopSwordDirectly = false;
-  xDraftMeta.textContent = 'Ready for selected slate';
-  xDraftStatus.textContent = '';
-  setXDraftControls('');
-}
-
-function renderXConnectionStatus() {
-  if (!xSharingEnabled) return;
-
-  connectXButton.textContent = isXConnected
-    ? (xScreenName ? `@${xScreenName}` : 'OAuth2 Ready')
-    : 'Connect X';
-  connectXButton.disabled = isXConnected;
-  postXNowButton.disabled = !isXConnected || !currentXShareText;
-  postTopSwordVideoButton.disabled = !canPostTopSwordDirectly || !currentSlateDate;
-  postTopSwordVideoButton.textContent = xMediaUploadEnabled ? 'Post #1 Video' : 'Post #1 Link';
-  postTopSwordVideoButton.title = xMediaUploadEnabled
-    ? 'Post the #1 sword with native X video.'
-    : 'Post the #1 sword with a SwordFinder watch link.';
-}
-
-function updateXDraftMeta(meta = {}) {
-  if (!xSharingEnabled) return;
-
-  if (meta.page_url) currentXPageUrl = meta.page_url;
-  const count = xDraftText.value.length;
-  const limit = Number(meta.limit || xDraftText.maxLength || 280);
-  const model = meta.model ? ` • ${meta.model}` : '';
-  const shareText = meta.share_text || buildEditableShareText(xDraftText.value);
-  xDraftMeta.textContent = `${count}/${limit} draft chars${model}`;
-  setXDraftControls(xDraftText.value, shareText);
-}
-
-async function copyXDraft() {
-  if (!xSharingEnabled) return;
-
-  const shareText = currentXShareText || buildEditableShareText(xDraftText.value);
-  if (!shareText) return;
-
-  try {
-    await navigator.clipboard.writeText(shareText);
-  } catch (_) {
-    xDraftText.focus();
-    xDraftText.select();
-    document.execCommand('copy');
-  }
-
-  xDraftStatus.textContent = 'Copied.';
-}
-
-async function refreshXConnectionStatus() {
-  if (!xSharingEnabled) return null;
-
-  try {
-    const status = await fetchApiJson('/share/x/oauth/status');
-    isXConnected = Boolean(status.connected);
-    xScreenName = status.screen_name || '';
-    xMediaUploadEnabled = status.media_upload_enabled !== false;
-    canPostTopSwordDirectly = Boolean(
-      status.connected &&
-      !status.admin_required &&
-      status.auth_mode !== 'oauth1_browser_session'
-    );
-    renderXConnectionStatus();
-    return status;
-  } catch (error) {
-    console.warn('Could not check X connection', error);
-    isXConnected = false;
-    xScreenName = '';
-    xMediaUploadEnabled = false;
-    canPostTopSwordDirectly = false;
-    renderXConnectionStatus();
-    return null;
-  }
-}
-
-async function connectXAccount() {
-  if (!xSharingEnabled) return;
-
-  const apiBaseUrl = getApiBaseUrl();
-  if (!apiBaseUrl) {
-    xDraftStatus.textContent = 'API base URL is required for X OAuth.';
-    return;
-  }
-
-  const authWindow = window.open('', 'swordfinder-x-oauth');
-  connectXButton.disabled = true;
-  xDraftStatus.textContent = 'Opening X authorization...';
-
-  try {
-    const payload = await fetchApiJson('/share/x/oauth/start-pin');
-    pendingXOAuthToken = payload.oauth_token || '';
-    xPinPanel.classList.remove('hidden');
-    xPinInput.value = '';
-
-    if (authWindow) {
-      authWindow.location.href = payload.authorize_url;
-      xDraftStatus.textContent = 'Authorize SwordFinder in the X tab, then paste the PIN here.';
-    } else {
-      xDraftStatus.innerHTML = `Open <a class="underline decoration-zinc-500 hover:decoration-[var(--accent-soft)]" href="${escapeHtml(payload.authorize_url)}" target="_blank" rel="noreferrer">X authorization</a>, then paste the PIN here.`;
-    }
-    xPinInput.focus();
-  } catch (error) {
-    if (authWindow) authWindow.close();
-    console.error(error);
-    xDraftStatus.textContent = error.message;
-  } finally {
-    connectXButton.disabled = false;
-  }
-}
-
-async function verifyXPin() {
-  if (!xSharingEnabled) return;
-
-  const pin = xPinInput.value.trim();
-  if (!pendingXOAuthToken || !pin) {
-    xDraftStatus.textContent = 'Paste the X authorization PIN first.';
-    return;
-  }
-
-  verifyXPinButton.disabled = true;
-  xDraftStatus.textContent = 'Verifying X PIN...';
-
-  try {
-    const payload = await fetchApiJson('/share/x/oauth/pin', {}, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ oauth_token: pendingXOAuthToken, pin }),
-    });
-    pendingXOAuthToken = '';
-    xPinInput.value = '';
-    xPinPanel.classList.add('hidden');
-    isXConnected = true;
-    xScreenName = payload.screen_name || '';
-    renderXConnectionStatus();
-    setXDraftControls(xDraftText.value, currentXShareText);
-    xDraftStatus.textContent = `Connected${xScreenName ? ` as @${xScreenName}` : ''}.`;
-  } catch (error) {
-    console.error(error);
-    xDraftStatus.textContent = error.message;
-    await refreshXConnectionStatus();
-  } finally {
-    verifyXPinButton.disabled = false;
-  }
-}
-
-async function postXNow() {
-  if (!xSharingEnabled) return;
-
-  const shareText = currentXShareText || buildEditableShareText(xDraftText.value);
-  if (!shareText || postXNowButton.disabled) return;
-
-  postXNowButton.disabled = true;
-  xDraftStatus.textContent = 'Posting to X...';
-
-  try {
-    const payload = await fetchApiJson('/share/x/post', {}, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ date: currentSlateDate, text: shareText }),
-    });
-
-    const postUrl = payload.url || `https://x.com/${payload.screen_name || 'i'}/status/${payload.id}`;
-    xDraftStatus.innerHTML = `Posted as @${escapeHtml(payload.screen_name || xScreenName || 'connected account')}: <a class="underline decoration-zinc-500 hover:decoration-[var(--accent-soft)]" href="${escapeHtml(postUrl)}" target="_blank" rel="noreferrer">view on X</a>`;
-  } catch (error) {
-    console.error(error);
-    xDraftStatus.textContent = error.message;
-    await refreshXConnectionStatus();
-  } finally {
-    setXDraftControls(xDraftText.value, currentXShareText);
-  }
-}
-
-async function postTopSwordVideo() {
-  if (!xSharingEnabled) return;
-
-  if (!currentSlateDate || postTopSwordVideoButton.disabled) return;
-
-  postTopSwordVideoButton.disabled = true;
-  xDraftPanel.classList.remove('hidden');
-  const postKind = xMediaUploadEnabled ? 'video' : 'link';
-  xDraftStatus.textContent = `Posting #1 sword ${postKind} with stats...`;
-
-  try {
-    const payload = await fetchApiJson('/share/x/top-sword', {}, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ date: currentSlateDate }),
-    });
-
-    if (payload.text) {
-      xDraftText.value = payload.text;
-      updateXDraftMeta({ share_text: payload.text, limit: 280 });
-    }
-    const postUrl = payload.url || `https://x.com/${payload.screen_name || 'i'}/status/${payload.id}`;
-    const postedKind = payload.post_mode || (payload.media ? 'video' : 'link');
-    const postedPrefix = postedKind === 'link' ? 'Posted #1 link' : 'Posted #1 video';
-    xDraftStatus.innerHTML = `${postedPrefix} as @${escapeHtml(payload.screen_name || xScreenName || 'connected account')}: <a class="underline decoration-zinc-500 hover:decoration-[var(--accent-soft)]" href="${escapeHtml(postUrl)}" target="_blank" rel="noreferrer">view on X</a>`;
-  } catch (error) {
-    console.error(error);
-    xDraftStatus.textContent = error.message;
-    await refreshXConnectionStatus();
-  } finally {
-    renderXConnectionStatus();
-  }
-}
-
-async function draftXPost() {
-  if (!xSharingEnabled) return;
-
-  if (!currentSlateDate || draftXPostButton.disabled) return;
-
-  draftXPostButton.disabled = true;
-  xDraftPanel.classList.remove('hidden');
-  xDraftText.value = '';
-  xDraftStatus.textContent = `Drafting for ${formatDate(currentSlateDate)}`;
-  xDraftMeta.textContent = 'Working';
-  setXDraftControls('');
-
-  try {
-    const payload = await fetchApiJson('/share/x/draft', {}, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ date: currentSlateDate, limit: 5 }),
-    });
-
-    xDraftText.value = payload.draft || '';
-    const shareText = payload.share_text || '';
-    updateXDraftMeta({ ...payload, share_text: shareText });
-    await refreshXConnectionStatus();
-    xDraftStatus.textContent = isXConnected
-      ? `Ready to post${xScreenName ? ` as @${xScreenName}` : ' with the configured X token'}.${xMediaUploadEnabled ? '' : ' Video posting needs media.write.'}`
-      : 'Connect X to post directly, or use Post on X to open the composer.';
-  } catch (error) {
-    console.error(error);
-    xDraftMeta.textContent = 'Draft unavailable';
-    xDraftStatus.textContent = error.message;
-  } finally {
-    draftXPostButton.disabled = false;
-  }
+function shareTopSword() {
+  if (!currentTopSword) return;
+  const row = currentTopSword;
+  const hitter = row.batter_name || row.player_name || 'A hitter';
+  const pitcher = row.pitcher_name || 'the pitcher';
+  const text = `${hitter} got fooled by ${pitcher} on ${formatDate(row.game_date)}. Sword Score ${Math.round(row.sword_score)}.`;
+  const url = new URL(linkForSword(row), window.location.origin).toString();
+  const intent = `https://x.com/intent/post?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
+  window.open(intent, '_blank', 'noopener');
 }
 
 async function loadTopCards(selectedDate) {
@@ -577,7 +268,7 @@ async function refreshSlate(date, options = {}) {
   if (!isCompleteDate(date)) return;
 
   currentSlateDate = date;
-  resetXDraftPanel();
+  currentTopSword = null;
   dateInput.disabled = true;
   setStatusText(`Loading top 5 swords for ${formatDate(date)}`);
 
@@ -587,6 +278,8 @@ async function refreshSlate(date, options = {}) {
     const slate = await loadTopCards(date);
     updateHeroMetricsFromSlate(slate, date);
     renderSwordOfDayFeature(slate, date);
+    currentTopSword = slate?.rows?.[0] || null;
+    if (shareXButton) shareXButton.disabled = !currentTopSword;
   } finally {
     dateInput.disabled = false;
   }
@@ -600,28 +293,11 @@ function refreshSelectedDate() {
 
 dateInput.addEventListener('input', refreshSelectedDate);
 dateInput.addEventListener('change', refreshSelectedDate);
-if (xSharingEnabled) {
-  draftXPostButton.addEventListener('click', draftXPost);
-  connectXButton.addEventListener('click', connectXAccount);
-  postXNowButton.addEventListener('click', postXNow);
-  postTopSwordVideoButton.addEventListener('click', postTopSwordVideo);
-  verifyXPinButton.addEventListener('click', verifyXPin);
-  copyXDraftButton.addEventListener('click', copyXDraft);
-  xDraftText.addEventListener('input', () => updateXDraftMeta());
-  xPinInput.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      verifyXPin();
-    }
-  });
-}
+if (shareXButton) shareXButton.addEventListener('click', shareTopSword);
 
 async function init() {
   try {
-    setStatusText('Loading live swords for 2026');
-    if (xSharingEnabled) {
-      await refreshXConnectionStatus();
-    }
+    setStatusText('Loading the latest swords');
     const latestDate = await getLatestSwordDate();
     const requestedDate = new URLSearchParams(window.location.search).get('date');
     const selectedDate = requestedDate || latestDate;

@@ -6,7 +6,7 @@ import {
   latestSeasonRange,
   linkForPitcher,
   parseEntityIdFromPath,
-} from './supabase-rest.js';
+} from './data.js';
 import { mountNav, setFooter, setStatusText } from './layout.js';
 
 mountNav();
