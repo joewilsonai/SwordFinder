@@ -70,7 +70,7 @@ function breakdownItem(label, value, detail) {
 
 function renderVideo(row) {
   if (!row.video_azure_blob_url) {
-    videoPlaceholder.textContent = 'Video pending';
+    videoPlaceholder.textContent = 'No clip available';
     return;
   }
 

@@ -41,7 +41,7 @@ function renderHistory(rows) {
             <video data-hover-unmute="true" data-play-on-screen="true" muted loop playsinline controls preload="none">
               <source src="${row.video_azure_blob_url}" type="video/mp4" />
             </video>
-          ` : `<div class="flex h-[220px] items-center justify-center text-sm text-zinc-500">Video pending</div>`}
+          ` : `<div class="flex h-[220px] items-center justify-center text-sm text-zinc-500">No clip available</div>`}
         </div>
       </article>
     `

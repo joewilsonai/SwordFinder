@@ -1,7 +1,9 @@
 import sys
 import unittest
+import urllib.error
 from datetime import date
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pipeline"))
 
@@ -93,6 +95,28 @@ class LegacyClips(unittest.TestCase):
         loose = self.row(video_azure_blob_url=f"{BASE}/sword_videos/20260621/x.mp4")
         kept = self.row("b", video_azure_blob_url=f"{BASE}/swords/2026-06-21/some-play-id.mp4")
         self.assertEqual(self.match([], loose, kept), [None, kept["video_azure_blob_url"]])
+
+
+class MissingClips(unittest.TestCase):
+    def run_fill(self, error):
+        row = {"id": "a", "play_id": "p", "game_date": "2026-06-21", "sword_score": 100, "video_azure_blob_url": None}
+
+        def fake_url(_):
+            raise error
+
+        with mock.patch.object(update, "mlb_clip_url", fake_url), mock.patch.dict(update.os.environ, {}, clear=False):
+            failures = update.fill_clips([row], 5, BASE, 1)
+        return row, failures
+
+    def test_a_404_means_no_clip_not_an_error(self):
+        row, failures = self.run_fill(urllib.error.HTTPError("u", 404, "x", None, None))
+        self.assertEqual(failures, 0)
+        self.assertTrue(row["clip_unavailable"])
+
+    def test_an_outage_stays_an_error_and_retries(self):
+        row, failures = self.run_fill(urllib.error.HTTPError("u", 503, "x", None, None))
+        self.assertEqual(failures, 1)
+        self.assertNotIn("clip_unavailable", row)
 
 
 if __name__ == "__main__":

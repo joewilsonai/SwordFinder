@@ -272,7 +272,7 @@ function renderLeaderboardVideo(row, className = '') {
   if (!row.video_azure_blob_url) {
     return `
       <div class="leaderboard-video video-shell ${className}">
-        <div class="video-placeholder text-sm text-zinc-500">Video pending</div>
+        <div class="video-placeholder text-sm text-zinc-500">No clip available</div>
       </div>
     `;
   }

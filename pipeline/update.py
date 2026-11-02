@@ -18,6 +18,7 @@ import re
 import sys
 import time
 import unicodedata
+import urllib.error
 import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
@@ -46,6 +47,10 @@ def fetch(url: str, tries: int = 4, timeout: int = 120) -> bytes:
             req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "*/*"})
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 return resp.read()
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404 or attempt == tries - 1:
+                raise
+            time.sleep(3 * (attempt + 1))
         except OSError:
             if attempt == tries - 1:
                 raise
@@ -227,18 +232,26 @@ def needs_clip(row: dict) -> bool:
 def fill_clips(rows: list[dict], limit: int, base: str, workers: int) -> int:
     """Newest and nastiest first, so a capped run still fixes what people see."""
     conn = os.environ.get("AZURE_STORAGE_CONNECTION_STRING")
-    todo = [r for r in rows if r.get("play_id") and needs_clip(r) and (conn or not r.get("video_azure_blob_url"))]
+    todo = [r for r in rows if r.get("play_id") and not r.get("clip_unavailable") and needs_clip(r)
+            and (conn or not r.get("video_azure_blob_url"))]
     todo.sort(key=lambda r: (r["game_date"], r["sword_score"]), reverse=True)
     failures = [0]
 
     def work(row: dict) -> None:
         try:
             url = mlb_clip_url(row["play_id"])
-            if not url:
+            if url and conn:
+                url = copy_to_azure(url, row, conn, base)
+            if url:
+                row["video_azure_blob_url"] = url
+            else:
+                row["clip_unavailable"] = True
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:  # MLB lists the play but has no video behind it
+                row["clip_unavailable"] = True
                 return
-            row["video_azure_blob_url"] = url
-            if conn:
-                row["video_azure_blob_url"] = copy_to_azure(url, row, conn, base)
+            failures[0] += 1
+            print(f"  clip {row['id']}: {exc}", file=sys.stderr)
         except Exception as exc:  # noqa: BLE001 — one bad clip must not stop the day's data
             failures[0] += 1
             print(f"  clip {row['id']}: {exc}", file=sys.stderr)
@@ -339,6 +352,7 @@ def main() -> int:
         "latest_date": ordered[0]["game_date"] if ordered else None,
         "swords": len(ordered),
         "with_clip": sum(1 for r in ordered if r.get("video_azure_blob_url")),
+        "clip_unavailable": sum(1 for r in ordered if r.get("clip_unavailable")),
         "in_azure": sum(1 for r in ordered if not needs_clip(r)),
         "pitches": sum(sum(t["batter"].values()) for t in per_day.values()),
         "errors": errors,

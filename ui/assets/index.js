@@ -100,7 +100,7 @@ function cardTemplate(row, idx) {
   const swordLink = linkForSword(row);
   const video = row.video_azure_blob_url;
   const score = Number(row.sword_score || 0).toFixed(1);
-  const videoBadge = video ? 'Video ready' : 'Video pending';
+  const videoBadge = video ? 'Video ready' : 'No clip available';
   const pitchName = row.pitch_name || row.pitch_type || 'Pitch';
 
   return `

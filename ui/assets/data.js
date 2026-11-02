@@ -42,7 +42,7 @@ export async function fetchCount(_table, params = {}) {
 }
 
 function missingClips(rows) {
-  return rows.filter((row) => !row.video_azure_blob_url).length;
+  return rows.filter((row) => !row.video_azure_blob_url && !row.clip_unavailable).length;
 }
 
 export async function fetchApiJson(path, params = {}) {
