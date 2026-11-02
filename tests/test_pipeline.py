@@ -52,27 +52,47 @@ class SwordRules(unittest.TestCase):
         self.assertEqual(update.default_season(date(2027, 3, 1)), 2027)
 
 
-class ExistingClips(unittest.TestCase):
-    def clip(self, blobs, **row):
-        base = {"game_date": "2026-06-21", "pitcher_name": "Chase Silseth", "bat_speed": 24.2, "sword_score": 110.0}
-        return update.existing_clip({**base, **row}, update.blobs_by_day(blobs), BASE)
+class LegacyClips(unittest.TestCase):
+    def row(self, id="a", **changes):
+        base = {"id": id, "game_date": "2026-06-21", "pitcher_name": "Chase Silseth", "bat_speed": 24.2, "sword_score": 110.0}
+        return {**base, **changes}
+
+    def match(self, blobs, *rows):
+        update.match_legacy_clips(list(rows), update.blobs_by_day(blobs), BASE)
+        return [r.get("video_azure_blob_url") for r in rows]
 
     def test_matches_by_day_pitcher_and_speed(self):
         blob = "swords/2026-06-21/sword_2026-06-21_Silseth,_Chase_24.2mph.mp4"
-        self.assertEqual(self.clip([blob]), f"{BASE}/swords/2026-06-21/sword_2026-06-21_Silseth%2C_Chase_24.2mph.mp4")
+        self.assertEqual(self.match([blob], self.row()), [f"{BASE}/swords/2026-06-21/sword_2026-06-21_Silseth%2C_Chase_24.2mph.mp4"])
 
-    def test_matches_older_score_names_and_accents(self):
-        blob = "sword_videos/20260621/sword_20260621_Rodón,_Carlos_110.mp4"
-        self.assertIn("sword_videos", self.clip([blob], pitcher_name="Carlos Rodón"))
-
-    def test_suffixes_are_not_the_last_name(self):
-        blob = "sword_videos/20260621/sword_20260621_Leiter_Jr.,_Mark_110.mp4"
-        self.assertIsNotNone(self.clip([blob], pitcher_name="Mark Leiter Jr."))
+    def test_older_score_names_accents_and_suffixes(self):
+        accent = "sword_videos/20260621/sword_20260621_Rodón,_Carlos_110.mp4"
+        self.assertIn("sword_videos", self.match([accent], self.row(pitcher_name="Carlos Rodón"))[0])
+        junior = "sword_videos/20260621/sword_20260621_Leiter_Jr.,_Mark_110.mp4"
+        self.assertIsNotNone(self.match([junior], self.row(pitcher_name="Mark Leiter Jr."))[0])
 
     def test_other_pitcher_or_speed_does_not_match(self):
         blob = "swords/2026-06-21/sword_2026-06-21_Silseth,_Chase_24.2mph.mp4"
-        self.assertIsNone(self.clip([blob], pitcher_name="Carlos Rodón"))
-        self.assertIsNone(self.clip([blob], bat_speed=30.0))
+        self.assertEqual(self.match([blob], self.row(pitcher_name="Carlos Rodón")), [None])
+        self.assertEqual(self.match([blob], self.row(bat_speed=30.0)), [None])
+
+    def test_part_of_a_name_is_not_the_name(self):
+        blob = "sword_videos/20260621/sword_20260621_Martinez,_Nick_110.mp4"
+        self.assertEqual(self.match([blob], self.row(pitcher_name="Davis Martin")), [None])
+
+    def test_two_swords_never_share_a_clip(self):
+        blob = "sword_videos/20260621/sword_20260621_Silseth,_Chase_91.mp4"
+        rows = [self.row("a", sword_score=90.2), self.row("b", sword_score=91.3)]
+        self.assertEqual(self.match([blob], *rows), [None, None])
+
+    def test_a_sword_fitting_two_clips_gets_neither(self):
+        blobs = [f"sword_videos/20260621/sword_20260621_Silseth,_Chase_{n}.mp4" for n in (110, 111)]
+        self.assertEqual(self.match(blobs, self.row()), [None])
+
+    def test_an_old_loose_match_is_cleared_but_a_new_copy_stays(self):
+        loose = self.row(video_azure_blob_url=f"{BASE}/sword_videos/20260621/x.mp4")
+        kept = self.row("b", video_azure_blob_url=f"{BASE}/swords/2026-06-21/some-play-id.mp4")
+        self.assertEqual(self.match([], loose, kept), [None, kept["video_azure_blob_url"]])
 
 
 if __name__ == "__main__":

@@ -126,7 +126,7 @@ function cardTemplate(row, idx) {
       <p class="mb-3 text-sm text-zinc-400">${escapeHtml(describeScore(row))}</p>
       <div class="video-shell mb-3">
         ${video ? `
-          <video data-hover-unmute="true" autoplay muted loop playsinline controls preload="metadata">
+          <video data-hover-unmute="true" data-play-on-screen="true" muted loop playsinline controls preload="none">
             <source src="${video}" type="video/mp4" />
           </video>
         ` : `<div class="video-placeholder text-sm text-zinc-500">Video not yet available</div>`}

@@ -37,6 +37,7 @@ SEASON_END = (10, 15)  # regular season only; the upper bound just limits reques
 KEEP = ("pitch_type", "pitch_name", "release_speed", "effective_speed", "release_spin_rate", "description",
         "events", "zone", "bat_speed", "swing_length", "swing_path_tilt", "home_team", "away_team")
 CONTAINER = "swordfinder-videos"
+LEGACY_CLIP = re.compile(r"/sword_videos/|/swords/\d{4}-\d{2}-\d{2}/sword_")
 
 
 def fetch(url: str, tries: int = 4, timeout: int = 120) -> bytes:
@@ -154,20 +155,45 @@ def last_name(full_name: str) -> str:
     return parts[-1] if parts else ""
 
 
-def existing_clip(row: dict, by_day: dict, base: str) -> str | None:
-    """Clips already in Azure are named by date, the pitcher's name, then bat speed or score."""
-    if not row.get("pitcher_name"):
-        return None
-    name = last_name(row["pitcher_name"])
-    speed = f"_{row['bat_speed']:.1f}mph.mp4"
+def blob_pitcher_matches(blob: str, full_name: str) -> bool:
+    """File names read sword_<date>_<Last,_First>_<speed or score>.mp4; compare the whole last name."""
+    stem = plain(blob.rsplit("/", 1)[-1]).split(",")[0]
+    return last_name(full_name) in stem.split("_")[2:]
+
+
+def clip_fits(blob: str, row: dict) -> bool:
+    if not row.get("pitcher_name") or not blob_pitcher_matches(blob, row["pitcher_name"]):
+        return False
+    low = plain(blob)
+    if low.endswith("mph.mp4"):
+        return low.endswith(f"_{row['bat_speed']:.1f}mph.mp4")
     score = round(row["sword_score"])
-    for blob in by_day.get(row["game_date"].replace("-", ""), []):
-        low = plain(blob)
-        if name not in low:
-            continue
-        if low.endswith(speed) or any(low.endswith(f"_{s}.mp4") for s in (score - 1, score, score + 1)):
-            return f"{base}/{urllib.parse.quote(blob)}"
-    return None
+    return any(low.endswith(f"_{s}.mp4") for s in (score - 1, score, score + 1))
+
+
+def match_legacy_clips(rows: list[dict], by_day: dict, base: str) -> None:
+    """Old clips are named, not keyed, so only trust a pairing that can't be anything else.
+
+    A clip that fits two swords, or a sword that fits two clips, gets neither; those rows fetch
+    their own copy by MLB play id instead of risking the wrong video.
+    """
+    day_rows: dict[str, list[dict]] = {}
+    for row in rows:
+        day_rows.setdefault(row["game_date"].replace("-", ""), []).append(row)
+    for day, members in day_rows.items():
+        blobs = by_day.get(day, [])
+        fits = {row["id"]: [b for b in blobs if clip_fits(b, row)] for row in members}
+        claims: dict[str, int] = {}
+        for found in fits.values():
+            for blob in found:
+                claims[blob] = claims.get(blob, 0) + 1
+        for row in members:
+            found = fits[row["id"]]
+            url = f"{base}/{urllib.parse.quote(found[0])}" if len(found) == 1 and claims[found[0]] == 1 else None
+            if url:
+                row["video_azure_blob_url"] = url
+            elif LEGACY_CLIP.search(row.get("video_azure_blob_url") or ""):
+                row["video_azure_blob_url"] = None
 
 
 def blobs_by_day(blobs: list[str]) -> dict:
@@ -289,9 +315,7 @@ def main() -> int:
 
     index = load(AZURE_INDEX, {"base": "", "blobs": []})
     grouped = blobs_by_day(index["blobs"])
-    for row in rows.values():
-        if needs_clip(row):
-            row["video_azure_blob_url"] = existing_clip(row, grouped, index["base"]) or row.get("video_azure_blob_url")
+    match_legacy_clips(list(rows.values()), grouped, index["base"])
     clip_errors = fill_clips(list(rows.values()), args.clips, index["base"], args.workers)
 
     ordered = sorted(rows.values(), key=lambda r: (r["game_date"], r["sword_score"]), reverse=True)
@@ -305,7 +329,8 @@ def main() -> int:
     save(days_path, per_day)
     old_status = load(DATA / "status.json", {})
     if not ordered and old_status.get("swords"):  # the new year hasn't played yet: keep showing the last one
-        old_status["checked_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        old_status.update(errors=errors, clip_errors=clip_errors,
+                          checked_at=datetime.now(timezone.utc).isoformat(timespec="seconds"))
         save(DATA / "status.json", old_status)
         print(f"no {args.season} swords yet; still showing {old_status.get('season')}")
         return 1 if errors else 0

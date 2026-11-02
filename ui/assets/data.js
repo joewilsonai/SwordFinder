@@ -155,7 +155,25 @@ export function linkForSword(row) {
   return `/sword/${id}`;
 }
 
+// A clip can run 8 MB, so nothing downloads until it's on screen, and it pauses once it scrolls away.
+const playOnScreen = 'IntersectionObserver' in window
+  ? new IntersectionObserver((entries) => {
+    entries.forEach(({ target, isIntersecting }) => {
+      if (isIntersecting) {
+        target.play().catch(() => {});
+      } else {
+        target.pause();
+      }
+    });
+  }, { threshold: 0.5 })
+  : null;
+
 export function bindVideoHover(root = document) {
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (playOnScreen && !reducedMotion) {
+    root.querySelectorAll('video[data-play-on-screen="true"]').forEach((video) => playOnScreen.observe(video));
+  }
+
   root.querySelectorAll('video[data-hover-unmute="true"]').forEach((video) => {
     video.addEventListener('mouseenter', () => {
       video.muted = false;

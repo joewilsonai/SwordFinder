@@ -53,7 +53,7 @@ The daily run commits a check-in even when there are no games, which keeps GitHu
 
 ## Stack
 
-- **Frontend:** static HTML, vanilla JavaScript modules, Tailwind CDN, custom CSS, on Vercel from `ui/`
+- **Frontend:** static HTML, vanilla JavaScript modules, Tailwind built once to `ui/assets/tailwind.css` (see `tailwind.config.cjs`), custom CSS, on Vercel from `ui/`
 - **Data:** `pipeline/update.py`, Python standard library plus `azure-storage-blob` for copying clips
 - **Clips:** Azure Blob Storage
 - **Automation:** one GitHub Actions workflow

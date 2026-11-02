@@ -75,7 +75,7 @@ function renderVideo(row) {
   }
 
   videoShell.innerHTML = `
-    <video data-hover-unmute="true" autoplay muted loop playsinline controls preload="metadata">
+    <video data-hover-unmute="true" data-play-on-screen="true" muted loop playsinline controls preload="none">
       <source src="${escapeHtml(row.video_azure_blob_url)}" type="video/mp4" />
     </video>
   `;
