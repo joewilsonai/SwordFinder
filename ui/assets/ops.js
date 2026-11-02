@@ -14,10 +14,10 @@ if (!status) {
   const hours = (Date.now() - checked.getTime()) / 36e5;
   setStatusText(hours > 48
     ? `The daily job hasn't checked in for ${Math.round(hours)} hours.`
-    : `Daily job last checked in ${checked.toLocaleString()}.`);
+    : `The daily job last ran ${checked.toLocaleString()}.`);
   const facts = [
     ['Season', status.season],
-    ['Latest games', status.latest_date ? formatDate(status.latest_date) : 'None yet'],
+    ['Latest games read', status.latest_date ? formatDate(status.latest_date) : 'None yet'],
     ['Swords', Number(status.swords || 0).toLocaleString()],
     ['With a clip', Number(status.with_clip || 0).toLocaleString()],
     ['Pitches read', Number(status.pitches || 0).toLocaleString()],

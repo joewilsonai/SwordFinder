@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>SwordFinder | Ops</title>
+    <title>SwordFinder | How it works</title>
     <link rel="stylesheet" href="/assets/styles.css" />
     <link rel="stylesheet" href="/assets/tailwind.css" />
   </head>
@@ -12,14 +12,39 @@
 
     <main class="mx-auto flex w-full max-w-6xl flex-col gap-7 px-4 pb-12 pt-6 md:px-6 md:pt-10">
       <section class="card hero-glow p-5 md:p-7">
-        <p class="text-xs uppercase tracking-[0.14em] text-zinc-400">Operations</p>
-        <h1 class="brand-title mt-2 text-5xl leading-none md:text-6xl">Sword Room</h1>
+        <p class="text-xs uppercase tracking-[0.14em] text-zinc-400">Behind the swords</p>
+        <h1 class="brand-title mt-2 text-5xl leading-none md:text-6xl">How it works</h1>
         <p id="status-text" class="mt-5 text-sm text-zinc-400 loading-dots">Loading</p>
       </section>
+
       <section id="ops-facts" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"></section>
+
       <section class="card p-5 md:p-7">
-        <h2 class="brand-title text-3xl">How it runs</h2>
-        <p class="mt-3 text-sm text-zinc-300">A GitHub Action reads each day's pitches from Baseball Savant, keeps the swords, finds their clips, and commits plain JSON to the repo. Vercel deploys that as a static site. There's no database or API server to pause, so a quiet off-season can't take it down.</p>
+        <h2 class="brand-title text-3xl">How a swing gets scored</h2>
+        <p class="mt-3 text-sm text-zinc-300">First it has to be a sword: a swing and miss on strike three, with bat tracking and a bat speed under 60 mph. No K, no sword. The score starts at 50 and adds:</p>
+        <ul class="mt-3 grid gap-2 text-sm text-zinc-300">
+          <li><strong>Up to 50 for a dead bat.</strong> The slower the swing, the more points.</li>
+          <li><strong>Up to 25 for swing tilt.</strong> A steeper path through the zone scores higher.</li>
+          <li><strong>Up to 25 for swing length.</strong> A longer swing scores higher.</li>
+        </ul>
+        <p class="mt-3 text-sm text-zinc-300">90 makes the board. 100 is elite.</p>
+      </section>
+
+      <section class="card p-5 md:p-7">
+        <h2 class="brand-title text-3xl">What happens every morning</h2>
+        <ol class="mt-3 grid list-decimal gap-2 pl-5 text-sm text-zinc-300">
+          <li>A scheduled job reads the last few days of pitches from Baseball Savant.</li>
+          <li>It keeps the swords, scores them, and finds each one's clip.</li>
+          <li>It saves everything as plain data files, and the site redeploys itself.</li>
+          <li>Your browser loads those files directly.</li>
+        </ol>
+      </section>
+
+      <section class="card p-5 md:p-7">
+        <h2 class="brand-title text-3xl">Why it's built this way</h2>
+        <p class="mt-3 text-sm text-zinc-300">The first version ran across five services. Over the 2026 season the API disappeared, the daily jobs got switched off for inactivity, and the database paused. A health check was failing the whole time, and nobody was reading it. The site just sat there saying it couldn't load.</p>
+        <p class="mt-3 text-sm text-zinc-300">So this version has no database and no server. A slow off-season has nothing to shut off, and if the daily job ever stops, it shows on this page and we hear about it.</p>
+        <p class="mt-3 text-sm text-zinc-300">The code is <a class="underline" href="https://github.com/joewilsonai/SwordFinder">on GitHub</a>. Built by <a class="underline" href="https://joewilson.ai">Joe Wilson</a> with AI.</p>
       </section>
     </main>
 

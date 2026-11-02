@@ -49,7 +49,7 @@ The important product rule is **No K, no sword**. A hitter can look terrible on 
 
 There is no database and no API server. That's on purpose: the first version ran on Supabase, Railway, Azure, Vercel and GitHub Actions, and when the database paused and the API disappeared, the site went dark. Nothing here can pause.
 
-The daily run commits a check-in even when there are no games, which keeps GitHub from turning the schedule off. `/ops` shows the last check-in.
+The daily run commits a check-in even when there are no games, which keeps GitHub from turning the schedule off. `/ops` explains the scoring and shows the last check-in.
 
 ## Stack
 
@@ -65,7 +65,7 @@ The daily run commits a check-in even when there are no games, which keeps GitHu
 | [`/`](https://swordfinder.com) | Daily top-five sword slate |
 | [`/leaderboards`](https://swordfinder.com/leaderboards) | Pitch-type, hitter, and pitcher leaderboards |
 | [`/sword-info`](https://swordfinder.com/sword-info) | Explainer and source clips |
-| [`/ops`](https://swordfinder.com/ops) | Last check-in and data counts |
+| [`/ops`](https://swordfinder.com/ops) | How it works, last check-in and data counts |
 | `/sword/{id}` | Shareable sword detail page |
 | `/player/{id}` | Hitter sword profile |
 | `/pitcher/{id}` | Pitcher sword-inducer profile |
