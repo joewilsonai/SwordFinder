@@ -81,7 +81,6 @@ async function init() {
     const avg = rows.reduce((sum, r) => sum + Number(r.sword_score || 0), 0) / rows.length;
     const worst = rows.reduce((acc, r) => Math.max(acc, Number(r.sword_score || 0)), 0);
     const rate = totalPitches ? (rows.length / totalPitches) * 100 : 0;
-    const hydrated = Number(profile.hydrated || 0);
     const pending = Number(profile.pending_videos || 0);
 
     title.textContent = name;
@@ -92,12 +91,8 @@ async function init() {
     metricRate.textContent = `${rate.toFixed(2)}%`;
 
     renderHistory(rows);
-    if (profile.hydration_error) {
-      setStatusText(`Loaded profile for ${name}. Video fetch warning: ${profile.hydration_error}`);
-    } else if (hydrated > 0) {
-      setStatusText(`Loaded profile for ${name}. Cached ${hydrated} missing clip${hydrated === 1 ? '' : 's'}.`);
-    } else if (pending > 0) {
-      setStatusText(`Loaded profile for ${name}. ${pending} clip${pending === 1 ? '' : 's'} still pending.`);
+    if (pending > 0) {
+      setStatusText(`Loaded profile for ${name}. ${pending} clip${pending === 1 ? '' : 's'} on the way.`);
     } else {
       setStatusText(`Loaded profile for ${name}.`);
     }

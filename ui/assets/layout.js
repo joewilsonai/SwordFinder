@@ -118,9 +118,6 @@ export function mountFirstVisitIntro(options = {}) {
 }
 
 export function mountNav(active = 'home') {
-  // The Feedback launcher is shared chrome: mount it on every page that renders
-  // the nav, before any early return so it is always available.
-
   const nav = document.getElementById('top-nav');
   if (!nav) return;
 

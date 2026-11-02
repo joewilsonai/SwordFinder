@@ -1,4 +1,4 @@
-import { filterRows, queryRows } from './query.js';
+import { queryRows } from './query.js';
 
 // All of SwordFinder's data is plain JSON in /data, rebuilt daily by pipeline/update.py.
 
@@ -37,10 +37,6 @@ export async function fetchRows(_table, params = {}) {
   return queryRows(await seasonRows(), params);
 }
 
-export async function fetchCount(_table, params = {}) {
-  return filterRows(await seasonRows(), params).length;
-}
-
 function missingClips(rows) {
   return rows.filter((row) => !row.video_azure_blob_url && !row.clip_unavailable).length;
 }
@@ -52,7 +48,7 @@ export async function fetchApiJson(path, params = {}) {
       order: 'sword_score.desc',
       limit: params.limit || 5,
     });
-    return { date: params.date, count: rows.length, hydrated: 0, pending_videos: missingClips(rows), rows };
+    return { date: params.date, count: rows.length, pending_videos: missingClips(rows), rows };
   }
 
   const profile = path.match(/^\/profiles\/(batter|pitcher)\/(\d+)\/swords$/);
@@ -69,7 +65,7 @@ export async function fetchApiJson(path, params = {}) {
       entity_id: Number(id),
       count: found.length,
       total_pitches: Number(totals?.[kind]?.[id] || 0),
-      hydrated: 0,
+     
       pending_videos: missingClips(found),
       rows: found,
     };
@@ -98,31 +94,6 @@ export function formatDate(value) {
     day: 'numeric',
     year: 'numeric',
   });
-}
-
-export function formatApiTimestamp(value) {
-  if (!value) return '--';
-
-  const raw = String(value);
-  const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw);
-  const looksLikeIsoDateTime = /^\d{4}-\d{2}-\d{2}T/.test(raw);
-  const normalized = looksLikeIsoDateTime && !hasTimezone ? `${raw}Z` : raw;
-  const dt = new Date(normalized);
-
-  if (Number.isNaN(dt.getTime())) return value;
-  return dt.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
-
-export function formatCompact(value) {
-  if (value === null || value === undefined || Number.isNaN(Number(value))) {
-    return '--';
-  }
-  return Intl.NumberFormat('en-US', { notation: 'compact' }).format(Number(value));
 }
 
 export function escapeHtml(value) {
@@ -195,7 +166,7 @@ export function parseEntityIdFromPath(kind) {
   if (
     idx !== -1 &&
     nextPart &&
-    !['[id].html', 'profile', 'profile.html'].includes(nextPart)
+    !['profile', 'profile.html'].includes(nextPart)
   ) {
     return nextPart.replace('.html', '');
   }

@@ -100,7 +100,7 @@ function cardTemplate(row, idx) {
   const swordLink = linkForSword(row);
   const video = row.video_azure_blob_url;
   const score = Number(row.sword_score || 0).toFixed(1);
-  const videoBadge = video ? 'Video ready' : 'No clip available';
+  const videoBadge = video ? 'Video ready' : 'No clip';
   const pitchName = row.pitch_name || row.pitch_type || 'Pitch';
 
   return `
@@ -243,14 +243,10 @@ async function loadTopCards(selectedDate) {
   cardsRoot.classList.remove('hidden');
   emptyRoot.classList.add('hidden');
 
-  const hydrated = Number(slate.hydrated || 0);
   const pending = Number(slate.pending_videos || 0);
   let status = `Top 5 sword swings from ${formatDate(selectedDate)}.`;
-  if (hydrated > 0) {
-    status += ` Cached ${hydrated} missing ${hydrated === 1 ? 'video' : 'videos'}.`;
-  }
   if (pending > 0) {
-    status += ` ${pending} ${pending === 1 ? 'clip is' : 'clips are'} still pending.`;
+    status += ` ${pending} ${pending === 1 ? 'clip is' : 'clips are'} on the way.`;
   }
   setStatusText(status);
   bindVideoHover(cardsRoot);

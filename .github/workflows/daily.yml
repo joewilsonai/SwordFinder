@@ -27,6 +27,7 @@ jobs:
           python-version: '3.13'
       - run: pip install azure-storage-blob==12.*
       - run: python -m unittest discover -s tests
+      - run: node --test tests/query.test.mjs
       - name: Build the data
         id: build
         continue-on-error: true
