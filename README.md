@@ -43,7 +43,7 @@ The important product rule is **No K, no sword**. A hitter can look terrible on 
 
 A sword is a swing and miss on strike three, with bat tracking and a bat speed under 60 mph. The score starts at 50 and adds up to 50 for a slow bat, up to 25 for swing tilt, and up to 25 for swing length. 90 makes the board and 100 is elite. See `sword_score` in [`pipeline/update.py`](pipeline/update.py).
 
-## How It Works
+## How it works
 
 1. **A GitHub Action runs every morning** (`.github/workflows/daily.yml`) and calls `pipeline/update.py`.
 2. **It reads the previous days' pitches from Baseball Savant**, keeps the swords, and scores them.
@@ -62,7 +62,7 @@ The daily run commits a check-in even when there are no games, which keeps GitHu
 - **Clips:** Azure Blob Storage
 - **Automation:** one GitHub Actions workflow
 
-## Key Routes
+## Key routes
 
 | Route | Purpose |
 | --- | --- |
@@ -74,12 +74,14 @@ The daily run commits a check-in even when there are no games, which keeps GitHu
 | `/player/{id}` | Hitter sword profile |
 | `/pitcher/{id}` | Pitcher sword-inducer profile |
 
-## Run Locally
+## Run locally
 
 ```bash
-python3 pipeline/update.py --days 3 --clips 0   # refresh the data
+python3 pipeline/update.py --days 3 --clips 0   # refresh the data; no Azure key needed with --clips 0
 cd ui && python3 -m http.server 3000
 ```
+
+Then open <http://localhost:3000>. The clean URLs (`/leaderboards`, `/sword/{id}`) are Vercel rewrites from `ui/vercel.json`, so locally use the file names: `/leaderboards.html`, `/ops.html`, `/sword/profile.html?id=...`.
 
 ## Tests
 
@@ -88,7 +90,7 @@ python3 -m unittest discover -s tests
 node --test tests/query.test.mjs
 ```
 
-## What Broke
+## What broke
 
 The first version ran on five services. In 2026 the Railway API disappeared, GitHub switched off the daily jobs for inactivity, and Supabase paused a 2 GB database too big to restore on the free plan. A health check failed for days along the way and nobody was reading it.
 
